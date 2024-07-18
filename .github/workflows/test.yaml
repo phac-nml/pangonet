@@ -42,4 +42,4 @@ jobs:
 
       - name: Run
         run: |
-          pangonet         
+          pangonet --output-prefix data/pangonet --output-all      
