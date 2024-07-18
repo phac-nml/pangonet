@@ -11,7 +11,7 @@ import logging
 ALIAS_KEY_URL     = "https://raw.githubusercontent.com/cov-lineages/pango-designation/master/pango_designation/alias_key.json"
 LINEAGE_NOTES_URL = "https://raw.githubusercontent.com/cov-lineages/pango-designation/master/lineage_notes.txt"
 
-logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
 
 class PangoNet:
 
@@ -28,7 +28,7 @@ class PangoNet:
 
     def build(self, alias_key: str = None, lineage_notes: str = None, root: str = "root", outdir: str = None):
 
-        if outdir != "" and outdir != "." and not os.path.exists(outdir):
+        if outdir and outdir != "" and outdir != "." and not os.path.exists(outdir):
             os.makedirs(outdir)
         # Download alias key if not provided
         if not alias_key:
@@ -45,7 +45,9 @@ class PangoNet:
         self.lineages     = self.parse_lineages(lineage_notes_path)
         self.aliases      = self.parse_aliases(alias_key_path)
         self.recombinants = self.parse_recombinants(alias_key_path)
-        self.network      = self.create_network()      
+        self.network      = self.create_network()
+
+        return self
 
     def compress(self, lineage):
         '''
@@ -199,6 +201,15 @@ class PangoNet:
            network[lineage]["descendants"] = self.get_descendants(lineage=lineage, network=network)
 
         # ---------------------------------------------------------------------
+        # Iteratation #5: Decompressed aliases
+
+        lineages = list(network.keys())
+        for lineage in lineages:
+            decompressed = network[lineage]["decompressed"]
+            if decompressed and decompressed != '' and decompressed not in network:
+                network[decompressed] = network[lineage]
+
+        # ---------------------------------------------------------------------
         # Iteratation #4: Depth
 
         recombinants = self.get_recombinants(network=network, descendants=True)
@@ -260,6 +271,16 @@ class PangoNet:
         # Update attributes
         pango_net.recombinants = self.get_recombinants()
         return pango_net
+
+    def get_parents(self, lineage: str, network : OrderedDict = None):
+        if not network:
+            network = self.network
+        return network[lineage]["parents"]
+
+    def get_children(self, lineage: str, network : OrderedDict = None):
+        if not network:
+            network = self.network
+        return network[lineage]["children"]
 
     def get_ancestors(self, lineage: str, network : OrderedDict = None):
         '''
@@ -355,13 +376,13 @@ class PangoNet:
         dot  = "\n".join(lines)
         return dot
 
-    def to_table(self):
+    def to_table(self, sep="\t"):
         '''
         Create tsv table.
         '''
 
-        header = ["lineage", "parents", "children", "recombinant", "recombinant_descendant"]
-        rows   = []
+        header = sep.join(["lineage", "parents", "children", "recombinant", "recombinant_descendant"])
+        rows   = [header]
         recombinant_descendants = self.get_recombinants(descendants=True)
         for lineage,info in self.network.items():
             row = [
@@ -371,29 +392,27 @@ class PangoNet:
                 True if lineage in self.recombinants else False,
                 True if lineage in recombinant_descendants else False
             ]
-            rows.append(row)
-        table = [header] + rows
+            row = [str(r)for r in row]
+            rows.append(sep.join(row))
+
+        table = "\n".join(rows)
         return table
 
-    def to_json(self, network: OrderedDict = None):
+    def to_json(self, network: OrderedDict = None, compact=False):
         if not network:
             network = self.network
+
+        # Compact down network objects to simpler lists
+        if compact:
+            network = copy.deepcopy(network)
+            for lineage,info in network.items():
+                network[lineage]["parents"]     = ", ".join(info["parents"])
+                network[lineage]["children"]    = ", ".join(info["children"])
+                network[lineage]["ancestors"]   = ", ".join(info["ancestors"])
+                network[lineage]["descendants"] = ", ".join(info["descendants"])
+        
         json_data = str(json.dumps(network, indent=4))
         return json_data
-
-    def to_condensed_json(self, network: OrderedDict = None):
-        if not network:
-            network = self.network
-
-        network = copy.deepcopy(network)
-        # Condense down network objects to lists
-        for lineage,info in network.items():
-            network[lineage]["parents"] = ", ".join(network[lineage]["parents"])
-            network[lineage]["children"] = ", ".join(network[lineage]["children"])
-            network[lineage]["ancestors"] = ", ".join(network[lineage]["ancestors"])
-            network[lineage]["descendants"] = ", ".join(network[lineage]["descendants"])
-        json_data = str(json.dumps(network, indent=4))
-        return json_data        
 
     def to_newick(self, node: str=None, parent: str=None, processed:set=set(), depth:int=0, extended:bool=True):
         '''
@@ -447,17 +466,23 @@ class PangoNet:
         if depth == 0:
             newick += ";"
             newick = newick.replace(f":{branch_length};", ":0;")
-        return (newick, processed)
+
+        # On the last iteration, simply return the newick string
+        if depth == 0:
+            return newick
+        # Otherwise, return both newick and nodes processed so far
+        else:
+            return (newick, processed)
 
 def get_cli_options():
     import argparse
 
-    description = 'Create and manipulate a phylogenetic network of pango lineages.'
+    description = 'Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.'
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument('--lineage-notes', help='Path to the lineage_notes.txt')
     parser.add_argument('--alias-key',     help='Path to the alias_key.json')
-    parser.add_argument('--prefix',        help='Output prefix', default="pangonet")
+    parser.add_argument('--output-prefix', help='Output prefix', default="pangonet")
     parser.add_argument('--output-all',    help='Output all formats', action="store_true")
     parser.add_argument('--tsv',           help='Output metadata TSV', action="store_true")
     parser.add_argument('--json',          help='Output json', action="store_true")    
@@ -480,47 +505,45 @@ def cli():
     logging.info(f"Begin") 
 
     # Check output directory based on prefix
-    outdir = os.path.dirname(options.prefix)
+    outdir = os.path.dirname(options.output_prefix)
     if outdir != "" and outdir != "." and not os.path.exists(outdir):
         logging.info(f"Creating output directory: {outdir}")        
         os.makedirs(outdir)
 
     # Create the network from the alias key and lineage notes, will download the files if not given
-    pango_net = PangoNet()
-    pango_net.build(alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
+    pango_net = PangoNet().build(alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
 
     # -------------------------------------------------------------------------
     # Export
     # -------------------------------------------------------------------------
 
-    # Metadata
+    # Table (for IcyTree)
     if options.output_all or options.tsv:
-        metadata_path = options.prefix + ".tsv"
-        logging.info(f"Exporting table: {metadata_path}")
+        table_path = options.output_prefix + ".tsv"
+        logging.info(f"Exporting table: {table_path}")
         table = pango_net.to_table()
-        with open(metadata_path, 'w') as outfile:
-            for row in table:
-                outfile.write("\t".join([str(v) for v in row]) + "\n")
+        with open(table_path, 'w') as outfile:
+            outfile.write(table + "\n")
 
     # Standard newick
     if options.output_all or options.nwk:
-        newick_path = options.prefix + ".nwk"
+        newick_path = options.output_prefix + ".nwk"
         logging.info(f"Exporting standard newick: {newick_path}")
-        newick, _processed = pango_net.to_newick(extended=False)
+        newick = pango_net.to_newick(extended=False)
         with open(newick_path, 'w') as outfile:
             outfile.write(newick + "\n")
 
     # Extended newick
     if options.output_all or options.enwk:
-        newick_path = options.prefix + ".enwk"
+        newick_path = options.output_prefix + ".enwk"
         logging.info(f"Exporting extended newick: {newick_path}")
-        newick, _processed = pango_net.to_newick(extended=True)
+        newick = pango_net.to_newick(extended=True)
         with open(newick_path, 'w') as outfile:
             outfile.write(newick + "\n")
 
     # Mermaid
     if options.output_all or options.mermaid:
-        mermaid_path = options.prefix + ".mermaid"
+        mermaid_path = options.output_prefix + ".mermaid"
         logging.info(f"Exporting mermaid: {mermaid_path}")        
         mermaid = pango_net.to_mermaid()
         with open(mermaid_path, 'w') as outfile:
@@ -528,7 +551,7 @@ def cli():
 
     # Dot
     if options.output_all or options.dot:    
-        dot_path = options.prefix + ".dot"
+        dot_path = options.output_prefix + ".dot"
         dot = pango_net.to_dot()
         logging.info(f"Exporting dot: {dot_path}")
         with open(dot_path, 'w') as outfile:
@@ -536,15 +559,15 @@ def cli():
 
     # JSON
     if options.output_all or options.json:    
-        json_path = options.prefix + ".json"
+        json_path = options.output_prefix + ".json"
         logging.info(f"Exporting json: {json_path}")
         json_data = pango_net.to_json()
         with open(json_path, 'w') as outfile:
             outfile.write(json_data + "\n")
 
-        json_path = options.prefix + ".condensed.json"    
-        logging.info(f"Exporting condensed json: {json_path}") 
-        json_data = pango_net.to_condensed_json()
+        json_path = options.output_prefix + ".compact.json"    
+        logging.info(f"Exporting compact json: {json_path}") 
+        json_data = pango_net.to_json(compact=True)
         with open(json_path, 'w') as outfile:
             outfile.write(json_data + "\n")
 
