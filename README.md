@@ -41,7 +41,6 @@ graph LR;
     from pangonet import PangoNet
     pango = PangoNet().build()
     pango.get_descendants("JN.1.1")
-
     ['JN.1.1.1', 'XDK', 'XDK.1', 'XDK.1.1', 'XDK.1.2', 'XDK.2', 'XDK.3', 'XDK.4', 'XDK.4.1', 'XDK.5', 'XDK.6', 'JN.1.1.2', 'JN.1.1.3', 'LT.1', 'JN.1.1.4', 'JN.1.1.5', 'KR.1', 'KR.1.1', 'KR.1.2', 'KR.3', 'KR.4', 'KR.5', 'JN.1.1.6', 'KZ.1', 'KZ.1.1', 'KZ.1.1.1', 'JN.1.1.7', 'LC.1', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDZ', 'XDN', 'XDR', 'XDR.1']
 
     pango.get_ancestors("XDB")
