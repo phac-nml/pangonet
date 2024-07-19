@@ -35,42 +35,54 @@ graph LR;
 
 ## Why pangonet?
 
-1. **Quickly look up ancestors and descendants of any lineage (including recombinants).**
+1. **Quickly look up ancestors and descendants of any lineage.**
 
     ```python
     from pangonet import PangoNet
     pango = PangoNet().build()
+
+    # All descendants
     pango.get_descendants("JN.1.1")
     ['JN.1.1.1', 'XDK', 'XDK.1', 'XDK.1.1', 'XDK.1.2', 'XDK.2', 'XDK.3', 'XDK.4', 'XDK.4.1', 'XDK.5', 'XDK.6', 'JN.1.1.2', 'JN.1.1.3', 'LT.1', 'JN.1.1.4', 'JN.1.1.5', 'KR.1', 'KR.1.1', 'KR.1.2', 'KR.3', 'KR.4', 'KR.5', 'JN.1.1.6', 'KZ.1', 'KZ.1.1', 'KZ.1.1.1', 'JN.1.1.7', 'LC.1', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDZ', 'XDN', 'XDR', 'XDR.1']
 
+    # All paths to the root.  Recombination means there might be multiple!
     pango.get_ancestors("XDB")
     ['XBB.1.16.19', 'XBB.1.16', 'XBB.1', 'XBB', 'BJ.1', 'BA.2.10.1', 'BA.2.10', 'BA.2', 'B.1.1.529', 'B.1.1', 'B.1', 'B', 'root', 'BM.1.1.1', 'BM.1.1', 'BM.1', 'BA.2.75.3', 'BA.2.75']
+
+    # Most recent common ancestor. Recombination means there might be multiple!
+    pango.get_mrca(["XE", "XG"])
+    ["BA.1", "BA.2"]
     ```
 
     Multiple parents due to recombination are handled, as is recursive recombination where a lineage has experienced recombination multiple times in its evolutionary history.
 
-1. **`pangonet` has a command-line interface that requires no input files.**
+1. **Lots of output formats.**
 
-    All the required resources will be downloaded for you from [pango-designation](https://github.com/cov-lineages/pango-designation)! It also includes a wide variety of output formats for your [visualization](#visualize) needs.
+    The pango network can be exported to: `json`, `tsv`, `mermaid`, `dot` (graphviz), `newick` and [`extended newick`](https://en.wikipedia.org/wiki/Newick_format#Extended_Newick) for recombination. 
 
+1. **A command-line interface that requires no input files.**
+
+    All the required resources will be downloaded for you from [pango-designation](https://github.com/cov-lineages/pango-designation)! 
 
     ```bash
-    pangonet --output-all --output-prefix output/pangonet
+    pangonet --output-all --output-prefix output/pango
 
     2024-07-18 14:05:20,587 INFO:Begin
     2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
     2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
     2024-07-18 14:05:21,298 INFO:Creating aliases.
     2024-07-18 14:05:21,301 INFO:Creating network.
-    2024-07-18 14:05:21,517 INFO:Exporting table: output/pangonet.tsv
-    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pangonet.nwk
-    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pangonet.enwk
-    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pangonet.mermaid
-    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pangonet.dot
-    2024-07-18 14:05:21,602 INFO:Exporting json: output/pangonet.json
-    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pangonet.condensed.json
+    2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
+    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
+    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
+    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
+    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
+    2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
+    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
     2024-07-18 14:05:21,757 INFO:Done
     ```
+
+    - You can always use `--alias-key` and `--lineage-notes` to snapshot your network to a particular designation.
 
 1. **`pangonet` is a single script with no dependencies aside from `python`.**
 
@@ -131,20 +143,20 @@ The command-line interface `pangonet` can be used to download the latest designa
 1. Create a network from the latest designated lineages.
 
     ```bash
-    $ pangonet --output-prefix output/pangonet --output-all
+    $ pangonet --output-prefix output/pango --output-all
 
     2024-07-18 14:05:20,587 INFO:Begin
     2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
     2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
     2024-07-18 14:05:21,298 INFO:Creating aliases.
     2024-07-18 14:05:21,301 INFO:Creating network.
-    2024-07-18 14:05:21,517 INFO:Exporting table: output/pangonet.tsv
-    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pangonet.nwk
-    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pangonet.enwk
-    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pangonet.mermaid
-    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pangonet.dot
-    2024-07-18 14:05:21,602 INFO:Exporting json: output/pangonet.json
-    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pangonet.condensed.json
+    2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
+    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
+    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
+    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
+    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
+    2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
+    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
     2024-07-18 14:05:21,757 INFO:Done
     ```
 
@@ -341,6 +353,10 @@ print(pango_filter.to_json(compact=True))
     }
 }
 ```
+
+## To Do
+
+- `read_json`: Create `PangoNetwork` from an input JSON file.
 
 ## Credits
 
