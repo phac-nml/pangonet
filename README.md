@@ -164,12 +164,12 @@ pango = PangoNet().build()
 pango = PangoNet().build(alias_key="alias_key.json", lineage_notes="lineage_notes.txt")
 ```
 
-Compress and decompress aliases.
+Compress and uncompress aliases.
 
 > ❗ See [pango_aliasor](https://github.com/corneliusroemer/pango_aliasor) for a more sophisticated approach to alias compression.
 
 ```python
-pango.decompress("KP.3.1")
+pango.uncompress("KP.3.1")
 'B.1.1.529.2.86.1.1.11.1.3.1'
 
 pango.compress('B.1.1.529.2.86.1.1.11')
@@ -314,7 +314,7 @@ print(pango_filter.to_json(compact=True))
 ```json
 {
     "root": {
-        "decompressed": "",
+        "uncompressed": "",
         "depth": 0,
         "parents": "",
         "children": "B",
@@ -323,7 +323,7 @@ print(pango_filter.to_json(compact=True))
     },
     ...
     "BA.2.10.1": {
-        "decompressed": "B.1.1.529.2.10.1",
+        "uncompressed": "B.1.1.529.2.10.1",
         "depth": 7,
         "parents": "BA.2.10",
         "children": "BJ.1",
@@ -332,7 +332,7 @@ print(pango_filter.to_json(compact=True))
     },
     ...
     "XDB": {
-        "decompressed": "XDB",
+        "uncompressed": "XDB",
         "depth": 15,
         "parents": "XBB.1.16.19, XBB",
         "children": "",

@@ -8,14 +8,15 @@ import os
 import copy
 import logging
 
-ALIAS_KEY_URL     = "https://raw.githubusercontent.com/cov-lineages/pango-designation/master/pango_designation/alias_key.json"
-LINEAGE_NOTES_URL = "https://raw.githubusercontent.com/cov-lineages/pango-designation/master/lineage_notes.txt"
+# Will use github API later to get proper download link
+ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
+LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
 
 logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
 
 class PangoNet:
 
-    def __init__(self, alias_key: str = None, lineage_notes: str = None, root: str = "root"):
+    def __init__(self, root: str = "root"):
         '''
         root: If not None, manually create top level node with this name
         '''
@@ -26,7 +27,7 @@ class PangoNet:
         self.root = root        
         self.lineages = list()
 
-    def build(self, alias_key: str = None, lineage_notes: str = None, root: str = "root", outdir: str = None):
+    def build(self, alias_key: str = None, lineage_notes: str = None, outdir: str = None):
 
         if outdir and outdir != "" and outdir != "." and not os.path.exists(outdir):
             os.makedirs(outdir)
@@ -54,8 +55,8 @@ class PangoNet:
         Compress lineage name
         '''
 
-        # Decompress fully first
-        lineage_compress = self.decompress(lineage)
+        # uncompress fully first
+        lineage_compress = self.uncompress(lineage)
         # Split nomenclature on '.'. ex. BC = B.1.1.529.1.1.1
         # [ 'B', '1', '1', '529', '1', '1', '1']
         lineage_split = lineage_compress.split(".")
@@ -77,22 +78,244 @@ class PangoNet:
         alias = ".".join(lineage_split)
         return alias
 
-    def decompress(self, lineage):
+    def create_network(self):
         '''
-        Decompress lineage name.
+        root : If not None, manually create top level node with this name
+        '''
+        logging.info(f"Creating network.")
+
+        network = OrderedDict()
+        # Manually add a root node according to params
+        if self.root:
+            network[self.root] = {"uncompressed": "", "depth": 0, "parents": [], "children": [], "ancestors": [], "descendants": [], "depth": 0}
+        root = self.root
+
+        # ---------------------------------------------------------------------
+        # Iteration #1: Parents
+
+        for lineage in self.lineages:
+
+            uncompressed = self.uncompress(lineage)
+            uncompressed_split = uncompressed.split(".")
+
+            # Option 1: Root node
+            # If we don't have a root yet, assign to first one encountered
+            # This functionality isn't used for SARS-CoV-2
+            if not root:
+                root = lineage
+                depth = 0
+                parents = []
+            # Option 2: Lookup recombinant parents
+            elif lineage in self.recombinants:
+                parents = self.recombinants[lineage]
+            else:
+                uncompressed = self.uncompress(lineage)
+                # Option 3: Top level node, A or B
+                if "." not in uncompressed:
+                    parents = [self.root]
+                else:
+                    uncompressed_parent = uncompressed_split[0: (len(uncompressed_split) - 1)]
+                    parents = [self.compress(".".join(uncompressed_parent))]
+
+            network[lineage] = {"uncompressed": uncompressed, "depth": 0, "parents": parents, "children": [], "ancestors": [], "descendants": []}
+    
+        # ---------------------------------------------------------------------
+        # Iteratation #2: Children
+
+        for lineage,info in network.items():
+            for parent in info["parents"]:
+               network[parent]["children"].append(lineage)
+
+        # ---------------------------------------------------------------------
+        # Iteratation #3: Descendants and Ancestors
+    
+        for lineage in network:
+           network[lineage]["ancestors"] = self.get_ancestors(lineage=lineage, network=network)
+           network[lineage]["descendants"] = self.get_descendants(lineage=lineage, network=network)
+
+        # ---------------------------------------------------------------------
+        # Iteratation #5: uncompressed aliases
+
+        lineages = list(network.keys())
+        for lineage in lineages:
+            uncompressed = network[lineage]["uncompressed"]
+            if uncompressed and uncompressed != '' and uncompressed not in network:
+                network[uncompressed] = network[lineage]
+
+        # ---------------------------------------------------------------------
+        # Iteratation #4: Depth
+
+        recombinants = self.get_recombinants(network=network, descendants=True)
+
+        for lineage,info in network.items():
+            if lineage == self.root:
+                depth = 0
+            elif lineage in recombinants:
+                max_parent_depth = 0
+                for parent in network[lineage]["parents"]:
+                    parent_depth = network[parent]["depth"]                 
+                    if parent_depth > max_parent_depth:
+                        max_parent_depth = parent_depth
+                depth = max_parent_depth + 1
+            else:
+                depth = len(info["uncompressed"].split("."))
+            network[lineage]["depth"] = depth
+
+        return network
+
+    def download_alias_key(self, url: str = ALIAS_KEY_URL, outdir: str = None):
+
+        # Get proper download link with github api
+        if "api.github.com" in url:
+            with urllib.request.urlopen(url) as api_url:
+                url = str(json.load(api_url)["download_url"])
+
+        alias_key_path = os.path.basename(url)
+        if outdir:
+            alias_key_path = os.path.join(outdir, alias_key_path)
+        logging.info(f"Downloading alias key: {alias_key_path}")    
+        urllib.request.urlretrieve(url, alias_key_path)
+        return alias_key_path
+
+    def download_lineage_notes(self, url: str = LINEAGE_NOTES_URL, outdir: str = None):
+
+        # Get proper download link with github api
+        if "api.github.com" in url:
+            with urllib.request.urlopen(url) as api_url:
+                url = str(json.load(api_url)["download_url"])
+        
+        lineage_notes_path = os.path.basename(url)
+        if outdir:
+            lineage_notes_path = os.path.join(outdir, lineage_notes_path)
+        logging.info(f"Downloading lineage notes: {lineage_notes_path}")        
+        urllib.request.urlretrieve(url, lineage_notes_path)
+        return lineage_notes_path
+
+    def filter(self, lineages: [str], network: OrderedDict = None):
+        '''
+        Filter network to only the specified lineages.
         '''
 
-        # Split nomenclature on '.'. ex. BC = B.1.1.529.1.1.1
-        # [ 'B', '1', '1', '529', '1', '1', '1']
-        lineage_split = lineage.split(".")
-        # Pango lineages have a maximum of four pieces before they need to be aliased
-        # Keep compressing it until it's the right size
-        prefix = lineage_split[0]
-        if prefix in self.aliases:
-            suffix = lineage_split[1:] if len(lineage_split) > 1 else []
-            lineage_split = [self.aliases[prefix]] + suffix
-            lineage = ".".join(lineage_split)
-        return(lineage)           
+        if not network:
+            network = self.network
+        
+        # Keep order of lineages in network
+        lineages = [l for l in network if l in lineages]
+        pango = copy.deepcopy(self)    
+
+        filtered_network = OrderedDict()        
+        for lineage in lineages:
+            info = network[lineage]
+            filtered_network[lineage] = copy.deepcopy(network[lineage])
+            filtered_network[lineage]["parents"]     = [l for l in info["parents"]     if l in lineages]
+            filtered_network[lineage]["children"]    = [l for l in info["children"]    if l in lineages]
+            filtered_network[lineage]["ancestors"]   = [l for l in info["ancestors"]   if l in lineages]
+            filtered_network[lineage]["descendants"] = [l for l in info["descendants"] if l in lineages]
+
+        pango.network = filtered_network
+        # Update attributes
+        pango.recombinants = self.get_recombinants()
+        return pango
+
+
+    def get_ancestors(self, lineage: str, network : OrderedDict = None):
+        '''
+        Get all ancestors between lineage and the root node.
+        '''
+
+        if not network:
+            network = self.network
+
+        ancestors = []
+
+        parents = network[lineage]["parents"]
+        if len(parents) == 0:
+            return []
+        for parent in network[lineage]["parents"]:
+            parent_ancestors = self.get_ancestors(lineage=parent, network=network)
+            ancestors += [parent] + parent_ancestors
+        # remove duplicates (python 3.7+ preserves order)
+        ancestors = list(dict.fromkeys(ancestors))
+        return ancestors                 
+
+    def get_children(self, lineage: str, network : OrderedDict = None):
+        if not network:
+            network = self.network
+        return network[lineage]["children"]
+
+    def get_descendants(self, lineage: str, network : OrderedDict = None):
+        '''
+        Get all descendants between lineage and all tips.
+        '''
+
+        if not network:
+            network = self.network
+
+        descendants = []
+        children = network[lineage]["children"]
+        if len(children) == 0:
+            return []
+        for child in network[lineage]["children"]:
+            child_descendants = self.get_descendants(lineage=child, network=network)
+            descendants += [child] + child_descendants
+        # remove duplicates (python 3.7+ preserves order)
+        descendants = list(dict.fromkeys(descendants))
+        return descendants
+
+    def get_mrca(self, lineages: [str], network: OrderedDict = None):
+        '''
+        Get most recent common ancestors
+        '''
+
+        if not network: 
+            network = self.network
+
+        # Make a pile of all ancestors, include lineages themselves in list
+        ancestors_count = {l:1 for l in lineages}
+        for lineage in lineages:
+            lineage_ancestors = network[lineage]["ancestors"]
+            for a in lineage_ancestors:
+                if a not in ancestors_count:
+                    ancestors_count[a] = 0
+                ancestors_count[a] += 1
+
+        # Filter down to ancestors observed in all lineages
+        ancestors_shared = [a for a,count in ancestors_count.items() if count == len(lineages)]
+
+        # If no shared ancestors?
+        if len(ancestors_shared) == 0:
+            return []
+        
+        # Add network depth to each ancestors
+        ancestors_depth = {a:network[a]["depth"] for a in ancestors_shared}
+
+        # Find the lineage with the highest depth value
+        max_depth = max(ancestors_depth.values())
+        ancestors = [a for a,d in ancestors_depth.items() if d == max_depth]
+
+        return ancestors
+
+    def get_parents(self, lineage: str, network : OrderedDict = None):
+        if not network:
+            network = self.network
+        return network[lineage]["parents"]
+
+    def get_recombinants(self, descendants=False, network: OrderedDict = None):
+        '''
+        '''
+
+        if not network:
+            network = self.network
+
+        recombinants = []
+        for lineage, info in network.items():
+            if len(info["parents"]) > 1:
+                recombinants.append(lineage)
+                if descendants:
+                    recombinants += info["descendants"]
+
+        return recombinants
+
 
     def parse_aliases(self, alias_key_path: str):
         '''
@@ -145,217 +368,6 @@ class PangoNet:
         return recombinants
               
 
-    def create_network(self):
-        '''
-        root : If not None, manually create top level node with this name
-        '''
-        logging.info(f"Creating network.")
-
-        network = OrderedDict()
-        # Manually add a root node according to params
-        if self.root:
-            network[self.root] = {"decompressed": "", "depth": 0, "parents": [], "children": [], "ancestors": [], "descendants": [], "depth": 0}
-        root = self.root
-
-        # ---------------------------------------------------------------------
-        # Iteration #1: Parents
-
-        for lineage in self.lineages:
-
-            decompressed = self.decompress(lineage)
-            decompressed_split = decompressed.split(".")
-
-            # Option 1: Root node
-            # If we don't have a root yet, assign to first one encountered
-            # This functionality isn't used for SARS-CoV-2
-            if not root:
-                root = lineage
-                depth = 0
-                parents = []
-            # Option 2: Lookup recombinant parents
-            elif lineage in self.recombinants:
-                parents = self.recombinants[lineage]
-            else:
-                decompressed = self.decompress(lineage)
-                # Option 3: Top level node, A or B
-                if "." not in decompressed:
-                    parents = [self.root]
-                else:
-                    decompressed_parent = decompressed_split[0: (len(decompressed_split) - 1)]
-                    parents = [self.compress(".".join(decompressed_parent))]
-
-            network[lineage] = {"decompressed": decompressed, "depth": 0, "parents": parents, "children": [], "ancestors": [], "descendants": []}
-    
-        # ---------------------------------------------------------------------
-        # Iteratation #2: Children
-
-        for lineage,info in network.items():
-            for parent in info["parents"]:
-               network[parent]["children"].append(lineage)
-
-        # ---------------------------------------------------------------------
-        # Iteratation #3: Descendants and Ancestors
-    
-        for lineage in network:
-           network[lineage]["ancestors"] = self.get_ancestors(lineage=lineage, network=network)
-           network[lineage]["descendants"] = self.get_descendants(lineage=lineage, network=network)
-
-        # ---------------------------------------------------------------------
-        # Iteratation #5: Decompressed aliases
-
-        lineages = list(network.keys())
-        for lineage in lineages:
-            decompressed = network[lineage]["decompressed"]
-            if decompressed and decompressed != '' and decompressed not in network:
-                network[decompressed] = network[lineage]
-
-        # ---------------------------------------------------------------------
-        # Iteratation #4: Depth
-
-        recombinants = self.get_recombinants(network=network, descendants=True)
-
-        for lineage,info in network.items():
-            if lineage == self.root:
-                depth = 0
-            elif lineage in recombinants:
-                max_parent_depth = 0
-                for parent in network[lineage]["parents"]:
-                    parent_depth = network[parent]["depth"]                 
-                    if parent_depth > max_parent_depth:
-                        max_parent_depth = parent_depth
-                depth = max_parent_depth + 1
-            else:
-                depth = len(info["decompressed"].split("."))
-            network[lineage]["depth"] = depth
-
-        return network
-
-    def download_alias_key(self, url: str = ALIAS_KEY_URL, outdir: str = None):
-        alias_key_path = os.path.basename(url)
-        if outdir:
-            alias_key_path = os.path.join(outdir, alias_key_path)
-        logging.info(f"Downloading alias key: {alias_key_path}")      
-        urllib.request.urlretrieve(url, alias_key_path)
-        return alias_key_path
-
-    def download_lineage_notes(self, url: str = LINEAGE_NOTES_URL, outdir: str = None):
-        lineage_notes_path = os.path.basename(url)
-        if outdir:
-            lineage_notes_path = os.path.join(outdir, lineage_notes_path)
-        logging.info(f"Downloading lineage notes: {lineage_notes_path}")        
-        urllib.request.urlretrieve(url, lineage_notes_path)
-        return lineage_notes_path
-
-    def filter(self, lineages: [str], network: OrderedDict = None):
-        '''
-        Filter network to only the specified lineages.
-        '''
-
-        if not network:
-            network = self.network
-        
-        # Keep order of lineages in network
-        lineages = [l for l in network if l in lineages]
-        pango_net = copy.deepcopy(self)    
-
-        filtered_network = OrderedDict()        
-        for lineage in lineages:
-            info = network[lineage]
-            filtered_network[lineage] = copy.deepcopy(network[lineage])
-            filtered_network[lineage]["parents"]     = [l for l in info["parents"]     if l in lineages]
-            filtered_network[lineage]["children"]    = [l for l in info["children"]    if l in lineages]
-            filtered_network[lineage]["ancestors"]   = [l for l in info["ancestors"]   if l in lineages]
-            filtered_network[lineage]["descendants"] = [l for l in info["descendants"] if l in lineages]
-
-        pango_net.network = filtered_network
-        # Update attributes
-        pango_net.recombinants = self.get_recombinants()
-        return pango_net
-
-    def get_parents(self, lineage: str, network : OrderedDict = None):
-        if not network:
-            network = self.network
-        return network[lineage]["parents"]
-
-    def get_children(self, lineage: str, network : OrderedDict = None):
-        if not network:
-            network = self.network
-        return network[lineage]["children"]
-
-    def get_ancestors(self, lineage: str, network : OrderedDict = None):
-        '''
-        Get all ancestors between lineage and the root node.
-        '''
-
-        if not network:
-            network = self.network
-
-        ancestors = []
-
-        parents = network[lineage]["parents"]
-        if len(parents) == 0:
-            return []
-        for parent in network[lineage]["parents"]:
-            parent_ancestors = self.get_ancestors(lineage=parent, network=network)
-            ancestors += [parent] + parent_ancestors
-        # remove duplicates (python 3.7+ preserves order)
-        ancestors = list(dict.fromkeys(ancestors))
-        return ancestors
-
-    def get_descendants(self, lineage: str, network : OrderedDict = None):
-        '''
-        Get all descendants between lineage and all tips.
-        '''
-
-        if not network:
-            network = self.network
-
-        descendants = []
-        children = network[lineage]["children"]
-        if len(children) == 0:
-            return []
-        for child in network[lineage]["children"]:
-            child_descendants = self.get_descendants(lineage=child, network=network)
-            descendants += [child] + child_descendants
-        # remove duplicates (python 3.7+ preserves order)
-        descendants = list(dict.fromkeys(descendants))
-        return descendants                    
-
-    def get_recombinants(self, descendants=False, network: OrderedDict = None):
-        '''
-        '''
-
-        if not network:
-            network = self.network
-
-        recombinants = []
-        for lineage, info in network.items():
-            if len(info["parents"]) > 1:
-                recombinants.append(lineage)
-                if descendants:
-                    recombinants += info["descendants"]
-
-        return recombinants
-
-    def to_mermaid(self, network: OrderedDict = None):
-
-        if not network:
-            network = self.network
-        lines = []
-
-        lines.append("graph LR;")
-        for lineage,info in network.items():
-            for parent in info["parents"]:
-                # Calculate the depth difference between the parent and lineage
-                # Ex. B (1) --> B.1 (2) is diff=1, which means the arrow will be -->
-                # Ex. BJ.1 (8) --> XBB (11) is diff=3, which means the arrow will be ---->
-                depth_diff = (info["depth"] - network[parent]["depth"]) - 1
-                arrow = "--" + ("-" * depth_diff) + ">"
-                lines.append(f"  {parent}{arrow}{lineage};")
-
-        mermaid = "\n".join(lines)
-        return mermaid
-
     def to_dot(self, network: OrderedDict = None):
 
         if not network:
@@ -376,27 +388,6 @@ class PangoNet:
         dot  = "\n".join(lines)
         return dot
 
-    def to_table(self, sep="\t"):
-        '''
-        Create tsv table.
-        '''
-
-        header = sep.join(["lineage", "parents", "children", "recombinant", "recombinant_descendant"])
-        rows   = [header]
-        recombinant_descendants = self.get_recombinants(descendants=True)
-        for lineage,info in self.network.items():
-            row = [
-                lineage,
-                ", ".join(info["parents"]),
-                ", ".join(info["children"]),
-                True if lineage in self.recombinants else False,
-                True if lineage in recombinant_descendants else False
-            ]
-            row = [str(r)for r in row]
-            rows.append(sep.join(row))
-
-        table = "\n".join(rows)
-        return table
 
     def to_json(self, network: OrderedDict = None, compact=False):
         if not network:
@@ -413,6 +404,27 @@ class PangoNet:
         
         json_data = str(json.dumps(network, indent=4))
         return json_data
+
+
+    def to_mermaid(self, network: OrderedDict = None):
+
+        if not network:
+            network = self.network
+        lines = []
+
+        lines.append("graph LR;")
+        for lineage,info in network.items():
+            for parent in info["parents"]:
+                # Calculate the depth difference between the parent and lineage
+                # Ex. B (1) --> B.1 (2) is diff=1, which means the arrow will be -->
+                # Ex. BJ.1 (8) --> XBB (11) is diff=3, which means the arrow will be ---->
+                depth_diff = (info["depth"] - network[parent]["depth"]) - 1
+                arrow = "--" + ("-" * depth_diff) + ">"
+                lines.append(f"  {parent}{arrow}{lineage};")
+
+        mermaid = "\n".join(lines)
+        return mermaid
+
 
     def to_newick(self, node: str=None, parent: str=None, processed:set=set(), depth:int=0, extended:bool=True):
         '''
@@ -474,15 +486,55 @@ class PangoNet:
         else:
             return (newick, processed)
 
+
+    def to_table(self, sep="\t"):
+        '''
+        Create tsv table.
+        '''
+
+        header = sep.join(["lineage", "parents", "children", "recombinant", "recombinant_descendant"])
+        rows   = [header]
+        recombinant_descendants = self.get_recombinants(descendants=True)
+        for lineage,info in self.network.items():
+            row = [
+                lineage,
+                ", ".join(info["parents"]),
+                ", ".join(info["children"]),
+                True if lineage in self.recombinants else False,
+                True if lineage in recombinant_descendants else False
+            ]
+            row = [str(r)for r in row]
+            rows.append(sep.join(row))
+
+        table = "\n".join(rows)
+        return table
+
+    def uncompress(self, lineage):
+        '''
+        Uncompress lineage name.
+        '''
+
+        # Split nomenclature on '.'. ex. BC = B.1.1.529.1.1.1
+        # [ 'B', '1', '1', '529', '1', '1', '1']
+        lineage_split = lineage.split(".")
+        # Pango lineages have a maximum of four pieces before they need to be aliased
+        # Keep compressing it until it's the right size
+        prefix = lineage_split[0]
+        if prefix in self.aliases:
+            suffix = lineage_split[1:] if len(lineage_split) > 1 else []
+            lineage_split = [self.aliases[prefix]] + suffix
+            lineage = ".".join(lineage_split)
+        return(lineage)
+
 def get_cli_options():
     import argparse
 
-    description = 'Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.'
+    description = 'pangonet v0.1.0 | Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.'
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument('--lineage-notes', help='Path to the lineage_notes.txt')
     parser.add_argument('--alias-key',     help='Path to the alias_key.json')
-    parser.add_argument('--output-prefix', help='Output prefix', default="pangonet")
+    parser.add_argument('--output-prefix', help='Output prefix', default="pango")
     parser.add_argument('--output-all',    help='Output all formats', action="store_true")
     parser.add_argument('--tsv',           help='Output metadata TSV', action="store_true")
     parser.add_argument('--json',          help='Output json', action="store_true")    
@@ -511,7 +563,7 @@ def cli():
         os.makedirs(outdir)
 
     # Create the network from the alias key and lineage notes, will download the files if not given
-    pango_net = PangoNet().build(alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
+    pango = PangoNet().build(alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
 
     # -------------------------------------------------------------------------
     # Export
@@ -521,7 +573,7 @@ def cli():
     if options.output_all or options.tsv:
         table_path = options.output_prefix + ".tsv"
         logging.info(f"Exporting table: {table_path}")
-        table = pango_net.to_table()
+        table = pango.to_table()
         with open(table_path, 'w') as outfile:
             outfile.write(table + "\n")
 
@@ -529,7 +581,7 @@ def cli():
     if options.output_all or options.nwk:
         newick_path = options.output_prefix + ".nwk"
         logging.info(f"Exporting standard newick: {newick_path}")
-        newick = pango_net.to_newick(extended=False)
+        newick = pango.to_newick(extended=False)
         with open(newick_path, 'w') as outfile:
             outfile.write(newick + "\n")
 
@@ -537,7 +589,7 @@ def cli():
     if options.output_all or options.enwk:
         newick_path = options.output_prefix + ".enwk"
         logging.info(f"Exporting extended newick: {newick_path}")
-        newick = pango_net.to_newick(extended=True)
+        newick = pango.to_newick(extended=True)
         with open(newick_path, 'w') as outfile:
             outfile.write(newick + "\n")
 
@@ -545,14 +597,14 @@ def cli():
     if options.output_all or options.mermaid:
         mermaid_path = options.output_prefix + ".mermaid"
         logging.info(f"Exporting mermaid: {mermaid_path}")        
-        mermaid = pango_net.to_mermaid()
+        mermaid = pango.to_mermaid()
         with open(mermaid_path, 'w') as outfile:
             outfile.write(mermaid + "\n")
 
     # Dot
     if options.output_all or options.dot:    
         dot_path = options.output_prefix + ".dot"
-        dot = pango_net.to_dot()
+        dot = pango.to_dot()
         logging.info(f"Exporting dot: {dot_path}")
         with open(dot_path, 'w') as outfile:
             outfile.write(dot + "\n")
@@ -561,13 +613,13 @@ def cli():
     if options.output_all or options.json:    
         json_path = options.output_prefix + ".json"
         logging.info(f"Exporting json: {json_path}")
-        json_data = pango_net.to_json()
+        json_data = pango.to_json()
         with open(json_path, 'w') as outfile:
             outfile.write(json_data + "\n")
 
         json_path = options.output_prefix + ".compact.json"    
         logging.info(f"Exporting compact json: {json_path}") 
-        json_data = pango_net.to_json(compact=True)
+        json_data = pango.to_json(compact=True)
         with open(json_path, 'w') as outfile:
             outfile.write(json_data + "\n")
 
