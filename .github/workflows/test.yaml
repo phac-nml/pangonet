@@ -34,8 +34,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
-          pip install -e .
+          pip install -e .[test]
 
       - name: Run
         run: |

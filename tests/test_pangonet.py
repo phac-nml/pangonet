@@ -14,8 +14,8 @@ new_lineage_notes = os.path.join(new_dir, "lineage_notes.txt")
 def test_pangonet_init():
     pango = PangoNet()
 
-# def test_pangonet_build():
-#     pango = PangoNet().build(outdir=new_dir)
+def test_pangonet_build():
+    pango = PangoNet().build(outdir=new_dir)
 
 def test_pangonet_compress():
     pango = PangoNet().build(alias_key=new_alias_key, lineage_notes=new_lineage_notes)

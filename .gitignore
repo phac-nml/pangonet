@@ -1,6 +1,7 @@
 alias_key.json
 lineage_notes.txt
 
+.coverage
 build/
 data/
 output/
