@@ -26,8 +26,8 @@ jobs:
           # linux
           - os: ubuntu-latest
             arch: linux
-          # # windows
-          # - os: windows-latest
+          # windows
+          - os: windows-latest
           #   arch: windows
           # # macOS
           # - os: macos-latest
@@ -58,7 +58,10 @@ jobs:
         run: |
           pytest -v
 
-      - name: CLI
+      - name: CLI Help
         run: |
           pangonet --help
-          pangonet --output-prefix data/pangonet --output-all
+
+      - name: CLI Run
+        run: |     
+          pangonet --output-prefix pango --output-all
