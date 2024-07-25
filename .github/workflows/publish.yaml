@@ -1,0 +1,41 @@
+name: Publish
+
+on:
+  # Remove these after testing
+  push:
+    branches:
+      - '*'
+      - 'dev'
+  pull_request:
+    branches:
+      - '*'
+  # Keep release as on condition
+  release:
+    types: [published]
+jobs:
+  # Publish package to pypi
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.10
+
+      - name: Install
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade setuptools wheel twine
+          pip install -e .[test]
+
+      # - name: Build and Deploy
+      #   env:
+      #     TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      #   run: |
+      #     python setup.py sdist bdist_wheel
+      #     twine upload dist/*
+      #     # twine upload --repository-url https://test.pypi.org/legacy/ dist/*

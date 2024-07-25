@@ -1,0 +1,88 @@
+# Re-usable workflow to create the docker image
+name: Docker
+
+on:
+  workflow_call:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  image:
+
+    strategy:
+      matrix:
+        arch: [x86_64-unknown-linux-musl]
+        os: [ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: registry login
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=docker,dest=pangonet.tar
+
+      - name: load
+        run: |
+          load=$(docker load --input pangonet.tar | tee /dev/stderr)
+          TAGS=$(echo $load | sed "s/Loaded image: //g")
+          echo TAGS="$TAGS" >> $GITHUB_ENV
+
+      # output.tags can be an array (ex. v0.2.0, main, latest)
+      - name: help
+        run: >
+          for tag in $TAGS; do
+            echo $tag
+            docker run $tag pangonet --help
+          done
+
+      - name: build and push
+        uses: docker/build-push-action@v5
+        if: startsWith(github.event.ref, 'refs/tags/v')
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: upload image artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pangonet-docker
+          path: pangonet.tar
+          retention-days: 7
+          if-no-files-found: error

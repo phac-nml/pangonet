@@ -1,26 +1,43 @@
-name: CI
+name: Test
 
 # Workflow conditions
 on:
   push:
     branches:
       - '*'
-      - 'dev'
   pull_request:
     branches:
       - '*'
   release:
     types: [published]
 
+# env:
+#   GITHUB_USERNAME: ${{ github.actor }}
+#   GITHUB_TOKEN: ${{ github.token }}
+#   DOCKER_IMAGE: "ghcr.io/${{ github.repository }}"
+
 jobs:
 
-  pytest:
-
-    runs-on: ubuntu-latest
+  test:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+        include:
+          # linux
+          - os: ubuntu-latest
+            arch: linux
+          # # windows
+          # - os: windows-latest
+          #   arch: windows
+          # # macOS
+          # - os: macos-latest
+          #   arch: macos
+          # # docker
+          # - os: ubuntu-latest
+          #   arch: docker
+        python-version: ["3.10"]
+
+    runs-on: ${{ matrix.os }}        
 
     steps:
       - name: Checkout repo
@@ -32,40 +49,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
+        if: ${{ matrix.arch != 'docker' }}
         run: |
           python -m pip install --upgrade pip
           pip install -e .[test]
 
-      - name: Run
+      - name: Pytest
         run: |
           pytest -v
 
-  cli:
-
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install .
-
-      - name: Display help
+      - name: CLI
         run: |
           pangonet --help
-
-      - name: Run
-        run: |
-          pangonet --output-prefix data/pangonet --output-all                
+          pangonet --output-prefix data/pangonet --output-all
