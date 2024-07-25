@@ -28,7 +28,7 @@ jobs:
             arch: linux
           # windows
           - os: windows-latest
-          #   arch: windows
+            arch: windows
           # # macOS
           # - os: macos-latest
           #   arch: macos
@@ -37,7 +37,7 @@ jobs:
           #   arch: docker
         python-version: ["3.10"]
 
-    runs-on: ${{ matrix.os }}        
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repo
