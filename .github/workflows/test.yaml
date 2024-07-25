@@ -22,22 +22,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: [3.7, 3.9]
         include:
-          # linux
           - os: ubuntu-latest
             arch: linux
-            python-version: ["3.7", "3.9"]
-          # windows
-          - os: windows-latest
+          - os: windows-altest
             arch: windows
-            python-version: ["3.7", "3.9"]
-          # macOS
-          - os: macos-latest
-            arch: macos
-            python-version: ["3.7", "3.9"]
-          # # docker
-          # - os: ubuntu-latest
-          #   arch: docker
+        # include:
+        #   # linux
+        #   - os: ubuntu-latest
+        #     arch: linux
+        #   # windows
+        #   - os: windows-latest
+        #     arch: windows
+        #   # macOS
+        #   - os: macos-latest
+        #     arch: macos
+        #   # # docker
+        #   # - os: ubuntu-latest
+        #   #   arch: docker
 
     runs-on: ${{ matrix.os }}
 
