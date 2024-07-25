@@ -22,17 +22,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9"]
         include:
           # linux
           - os: ubuntu-latest
             arch: linux
+            python-version: "3.9"
           # windows
           - os: windows-latest
             arch: windows
+            python-version: "3.9"
           # macOS
           - os: macos-latest
             arch: macos
+            python-version: "3.9"
           # # docker
           # - os: ubuntu-latest
           #   arch: docker
