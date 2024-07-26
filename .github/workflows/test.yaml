@@ -41,6 +41,12 @@ jobs:
           path: pangonet.tar
 
       # parse tag from load output, PR have unusual formats, also sometimes multiple tags
+      - name: Inspect Docker Image
+        run: |
+          ls -l pangonet.tar
+          file pangonet.tar
+
+      # parse tag from load output, PR have unusual formats, also sometimes multiple tags
       - name: Load Docker Image
         run: |
           load=$(docker load --input pangonet.tar | tee /dev/stderr)

@@ -182,10 +182,9 @@ class PangoNet:
                 req = urllib.request.Request(url)
 
         # Download file
-        with open(output, 'w') as outfile:
+        with open(output, 'w', encoding="utf-8") as outfile:
             response = urllib.request.urlopen(req)
             content = response.read().decode("utf-8", 'ignore')
-            # .decode(response.headers.get_content_charset())
             outfile.write(content)
 
         return output
