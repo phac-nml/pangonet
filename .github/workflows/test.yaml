@@ -48,16 +48,17 @@ jobs:
           TAG=$(echo -e $load | sed 's/Loaded image: //g' | head -n 1 | cut -d ":" -f 2 | cut -d " " -f 1)
           echo DOCKER_TAG="$TAG" >> $GITHUB_ENV
 
-      - name: Set Run Command
-        run: |
-          echo RUN_CMD="docker run -e GITHUB_USERNAME=${{ github.actor }} -e GITHUB_TOKEN=${{ github.token }} "$DOCKER_IMAGE:$DOCKER_TAG >> $GITHUB_ENV
-
-      - name: Check Run Command
-        run: echo ${{ env.RUN_CMD }}
+      - name: Pytest
+        run: |     
+          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pytest -v
 
       - name: CLI Help
         run: |
           docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --help
+
+      - name: CLI Run
+        run: |     
+          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --output-prefix output/pango --output-all
 
   # ---------------------------------------------------------------------------          
   test:
