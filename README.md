@@ -140,12 +140,12 @@ $ pangonet --output-prefix output/pango --output-all
 
 ```python
 from pangonet import PangoNet
-
 pango = PangoNet().build()
+
 lineages = []
 for l in ["XDB", "XBL", "AY.4"]:
-    lineages += l
-    lineages += pango.network[l]["ancestors"]
+    lineages += [l] + pango.get_ancestors(l)
+
 pango_filter = pango.filter(lineages)
 
 ```
