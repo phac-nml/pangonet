@@ -69,6 +69,7 @@ jobs:
             docker run $tag pangonet --help
           done
 
+      # On a tag that starts with v, push to registry
       - name: build and push
         uses: docker/build-push-action@v5
         if: startsWith(github.event.ref, 'refs/tags/v')
