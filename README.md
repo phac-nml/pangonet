@@ -69,7 +69,7 @@ pango.compress('B.1.1.529.2.86.1.1.11')
 
 # Get immediate parents and children
 pango.get_parents("JN.1")
-['JN.1']
+['BA.2.86.1']
 
 pango.get_children("JN.1")
 ['JN.1.1.1', 'JN.1.1.2', 'JN.1.1.3', 'JN.1.1.4', 'JN.1.1.5', 'JN.1.1.6', 'JN.1.1.7', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDN', 'XDR']
