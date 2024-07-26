@@ -35,7 +35,6 @@ jobs:
 
     steps:
       - name: Download Docker Image
-        if: ${{ matrix.arch == 'docker' }}
         uses: actions/download-artifact@v3
         with:
           name: pangonet-docker
@@ -43,7 +42,6 @@ jobs:
 
       # parse tag from load output, PR have unusual formats, also sometimes multiple tags
       - name: Load Docker Image
-        if:  matrix.arch == 'docker'
         run: |
           load=$(docker load --input pangonet.tar | tee /dev/stderr)
           echo -e $load
@@ -80,7 +78,7 @@ jobs:
 
       - name: CLI Help
         run: |
-          ${{ env.RUN_CMD }} --help
+          pangonet --help
 
       - name: CLI Run
         run: |     
