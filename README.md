@@ -35,24 +35,8 @@ graph LR;
 
 ## Why pangonet?
 
-1. **Quickly look up ancestors and descendants of any lineage.**
+1. **Quickly look up phylogenetic relationships between lineages.**
 
-    ```python
-    from pangonet import PangoNet
-    pango = PangoNet().build()
-
-    # All descendants
-    pango.get_descendants("JN.1.1")
-    ['JN.1.1.1', 'XDK', 'XDK.1', 'XDK.1.1', 'XDK.1.2', 'XDK.2', 'XDK.3', 'XDK.4', 'XDK.4.1', 'XDK.5', 'XDK.6', 'JN.1.1.2', 'JN.1.1.3', 'LT.1', 'JN.1.1.4', 'JN.1.1.5', 'KR.1', 'KR.1.1', 'KR.1.2', 'KR.3', 'KR.4', 'KR.5', 'JN.1.1.6', 'KZ.1', 'KZ.1.1', 'KZ.1.1.1', 'JN.1.1.7', 'LC.1', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDZ', 'XDN', 'XDR', 'XDR.1']
-
-    # All paths to the root.  Recombination means there might be multiple!
-    pango.get_ancestors("XDB")
-    ['XBB.1.16.19', 'XBB.1.16', 'XBB.1', 'XBB', 'BJ.1', 'BA.2.10.1', 'BA.2.10', 'BA.2', 'B.1.1.529', 'B.1.1', 'B.1', 'B', 'root', 'BM.1.1.1', 'BM.1.1', 'BM.1', 'BA.2.75.3', 'BA.2.75']
-
-    # Most recent common ancestor. Recombination means there might be multiple!
-    pango.get_mrca(["XE", "XG"])
-    ["BA.1", "BA.2"]
-    ```
 
     Multiple parents due to recombination are handled, as is recursive recombination where a lineage has experienced recombination multiple times in its evolutionary history.
 
@@ -60,33 +44,74 @@ graph LR;
 
     The pango network can be exported to: `json`, `tsv`, `mermaid`, `dot` (graphviz), `newick` and [`extended newick`](https://en.wikipedia.org/wiki/Newick_format#Extended_Newick) for recombination. 
 
-1. **A command-line interface that requires no input files.**
+1. **Command-line interface and python library that require no input files.**
 
-    All the required resources will be downloaded for you from [pango-designation](https://github.com/cov-lineages/pango-designation)! 
-
-    ```bash
-    pangonet --output-all --output-prefix output/pango
-
-    2024-07-18 14:05:20,587 INFO:Begin
-    2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
-    2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
-    2024-07-18 14:05:21,298 INFO:Creating aliases.
-    2024-07-18 14:05:21,301 INFO:Creating network.
-    2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
-    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
-    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
-    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
-    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
-    2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
-    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
-    2024-07-18 14:05:21,757 INFO:Done
-    ```
-
-    - You can always use `--alias-key` and `--lineage-notes` to snapshot your network to a particular designation.
+    All the required resources will be downloaded for you from [pango-designation](https://github.com/cov-lineages/pango-designation)!
 
 1. **`pangonet` is a single script with no dependencies aside from `python`.**
 
    Sometimes you just need a really simple utility script for a quick lineage query, without having to bother with creating a `conda` environment. You can stick the single `pangonet.py` script in any python project and be good to go. Full package installation is still provided for those who need it.
+
+## Usage
+
+### Python Library
+
+```python
+from pangonet import PangoNet
+pango = PangoNet().build()
+
+# Alias manipulation
+pango.uncompress("KP.3.1")
+'B.1.1.529.2.86.1.1.11.1.3.1'
+
+pango.compress('B.1.1.529.2.86.1.1.11')
+'JN.1.11'
+
+# Get immediate parents and children
+pango.get_parents("JN.1")
+['JN.1']
+
+pango.get_children("JN.1")
+['JN.1.1.1', 'JN.1.1.2', 'JN.1.1.3', 'JN.1.1.4', 'JN.1.1.5', 'JN.1.1.6', 'JN.1.1.7', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDN', 'XDR']
+
+# Get specific paths between lineages, recombination means there might be multiple routes!
+pango.get_paths(start="XE", end="B.1.1")
+[['XE', 'BA.1', 'B.1.1.529', 'B.1.1'], ['XE', 'BA.2', 'B.1.1.529', 'B.1.1']]
+
+# Or get all ancestors and descendants as big pile
+pango.get_ancestors("XE")
+['BA.1', 'B.1.1.529', 'B.1.1', 'B.1', 'B', 'root', 'BA.2']
+
+pango.get_descendants("KP.1")
+['KP.1.1', 'KP.1.1.1', 'MG.1', 'KP.1.1.2', 'KP.1.1.3', 'LP.1', 'LP.1.1', 'LP.2', 'LP.3', 'KP.1.1.4', 'KP.1.1.5', 'KP.1.2']
+
+# Most recent common ancestor(s) MRCA, recombination means there might be multiple!
+pango.get_mrca(["BQ.1", "BA.2.4"])
+['B.1.1.529']
+
+pango.get_mrca(["XE", "XG"])
+["BA.1", "BA.2"]
+```
+
+### Command-Line Interface
+
+```bash
+$ pangonet --output-prefix output/pango --output-all
+
+2024-07-18 14:05:20,587 INFO:Begin
+2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
+2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
+2024-07-18 14:05:21,298 INFO:Creating aliases.
+2024-07-18 14:05:21,301 INFO:Creating network.
+2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
+2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
+2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
+2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
+2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
+2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
+2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
+2024-07-18 14:05:21,757 INFO:Done
+```
 
 ## Install
 
@@ -109,128 +134,7 @@ graph LR;
     python pangonet.py --help
     ```
 
-## Usage
-
-### Command-Line Interface
-
-The command-line interface `pangonet` can be used to download the latest designated lineages and export a network for downstream applications.
-
-1. Display help and usage.
-
-    ```bash
-    $ pangonet --help
-
-    Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.
-
-    options:
-    -h, --help            show this help message and exit
-    --lineage-notes LINEAGE_NOTES
-                            Path to the lineage_notes.txt
-    --alias-key ALIAS_KEY
-                            Path to the alias_key.json
-    --output-prefix OUTPUT_PREFIX
-                            Output prefix
-    --output-all          Output all formats
-    --tsv                 Output metadata TSV
-    --json                Output json
-    --nwk                 Output newick tree
-    --enwk                Output extended newick tree for IcyTree
-    --mermaid             Output mermaid graph
-    --dot                 Output dot for graphviz
-    -v, --version         Print version
-    ```
-
-1. Create a network from the latest designated lineages.
-
-    ```bash
-    $ pangonet --output-prefix output/pango --output-all
-
-    2024-07-18 14:05:20,587 INFO:Begin
-    2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
-    2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
-    2024-07-18 14:05:21,298 INFO:Creating aliases.
-    2024-07-18 14:05:21,301 INFO:Creating network.
-    2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
-    2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
-    2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
-    2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
-    2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
-    2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
-    2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
-    2024-07-18 14:05:21,757 INFO:Done
-    ```
-
-Please see the [Visualize](#visualize) section for more information on the various output formats.
-
-### Package
-
-The `pangonet` python package provides functions to construct and manipulate a network of pango lineages.
-
-```python
-from pangonet import PangoNet
-
-# Build the network by downloading the latest designations
-pango = PangoNet().build()
-
-# Or, build the network from local files
-pango = PangoNet().build(alias_key="alias_key.json", lineage_notes="lineage_notes.txt")
-```
-
-Compress and uncompress aliases.
-
-> ❗ See [pango_aliasor](https://github.com/corneliusroemer/pango_aliasor) for a more sophisticated approach to alias compression.
-
-```python
-pango.uncompress("KP.3.1")
-'B.1.1.529.2.86.1.1.11.1.3.1'
-
-pango.compress('B.1.1.529.2.86.1.1.11')
-'JN.1.11'
-```
-
-Get immediate children and parents.
-
-```python
-# Using a compressed lineage name
-pango.get_children("JN.1.1")
-['JN.1.1.1', 'JN.1.1.2', 'JN.1.1.3', 'JN.1.1.4', 'JN.1.1.5', 'JN.1.1.6', 'JN.1.1.7', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDN', 'XDR']
-
-# Using the full lineage name
-pango.get_parents('B.1.1.529.2.86.1.1.1')
-['BA.2.86.1']
-
-# Recombinants (X*) will have multiple
-pango.get_parents('XBL')
-['XBB.1.5.57', 'BA.2.75']
-```
-
-Get comprehensive descendants and ancestors, following all possible paths.
-
-```python
-# Follow all possible paths to terminals
-pango.get_descendants("JN.1.1")
-['JN.1.1.1', 'XDK', 'XDK.1', 'XDK.1.1', 'XDK.1.2', 'XDK.2', 'XDK.3', 'XDK.4', 'XDK.4.1', 'XDK.5', 'XDK.6', 'JN.1.1.2', 'JN.1.1.3', 'LT.1', 'JN.1.1.4', 'JN.1.1.5', 'KR.1', 'KR.1.1', 'KR.1.2', 'KR.3', 'KR.4', 'KR.5', 'JN.1.1.6', 'KZ.1', 'KZ.1.1', 'KZ.1.1.1', 'JN.1.1.7', 'LC.1', 'JN.1.1.8', 'JN.1.1.9', 'JN.1.1.10', 'XDZ', 'XDN', 'XDR', 'XDR.1']
-
-# Follow all possible paths to the root
-pango.get_ancestors("XDB")
-['XBB.1.16.19', 'XBB.1.16', 'XBB.1', 'XBB', 'BJ.1', 'BA.2.10.1', 'BA.2.10', 'BA.2', 'B.1.1.529', 'B.1.1', 'B.1', 'B', 'root', 'BM.1.1.1', 'BM.1.1', 'BM.1', 'BA.2.75.3', 'BA.2.75']
-```
-
-Filter the network to lineages of interest.
-
-```python
-# Create a network of the following lineages and their ancestors.
-lineages = []
-for l in ["XDB", "XBL", "AY.4"]:
-    lineages += l
-    lineages += pango.network[l]["ancestors"]
-pango_filter = pango.filter(lineages)
-
-print(list(pango_filter.network))
-['root', 'B', 'B.1', 'B.1.1', 'B.1.1.529', 'BA.2', 'BA.2.10', 'BA.2.10.1', 'BJ.1', 'BA.2.75', 'BA.2.75.3', 'BM.1', 'BM.1.1', 'BM.1.1.1', 'B.1.617', 'B.1.617.2', 'AY.4', 'XBB', 'XBB.1', 'XBB.1.5', 'XBB.1.5.57', 'XBB.1.16', 'XBB.1.16.19', 'XBL', 'XDB']
-```
-
-### Visualize
+## Visualize
 
 `pangonet` also allows you to export the network in a wide variety of formats. We will filter down the lineages to better demonstrate visualization.
 

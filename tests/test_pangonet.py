@@ -51,6 +51,37 @@ def test_pangonet_get_parents():
     assert pango.get_parents("XBB")     == ['BJ.1', 'BM.1.1.1']
     assert pango.get_parents("XBB.1.5") == ['XBB.1']
 
+def test_pangonet_get_paths():
+    pango = PangoNet().build(alias_key=new_alias_key, lineage_notes=new_lineage_notes)
+    # Going towards root
+    assert pango.get_paths(start="BA.1", end="BA.1")  == [["BA.1"]]
+    assert pango.get_paths(start="BA.1", end="B.1.1") == [["BA.1", "B.1.1.529", "B.1.1" ]]
+    assert pango.get_paths(start="XE",   end="B.1")   == [
+        ['XE', 'BA.1', 'B.1.1.529', 'B.1.1', 'B.1'], 
+        ['XE', 'BA.2', 'B.1.1.529', 'B.1.1', 'B.1']
+    ]
+    # Going towards root, recursive recombination    
+    assert pango.get_paths(start="XBL",  end="B.1.1") == [
+        ['XBL', 'XBB.1.5.57', 'XBB.1.5', 'XBB.1', 'XBB', 'BJ.1', 'BA.2.10.1', 'BA.2.10', 'BA.2', 'B.1.1.529', 'B.1.1'],
+        ['XBL', 'XBB.1.5.57', 'XBB.1.5', 'XBB.1', 'XBB', 'BM.1.1.1', 'BM.1.1', 'BM.1', 'BA.2.75.3', 'BA.2.75', 'BA.2', 'B.1.1.529', 'B.1.1'],
+        ['XBL', 'BA.2.75', 'BA.2', 'B.1.1.529', 'B.1.1']
+    ]
+    
+
+    # Going towards tips
+    assert pango.get_paths(start="B.1.1.529", end="BA.2.3") == [["B.1.1.529", "BA.2", "BA.2.3"]]
+    assert pango.get_paths(start="B.1.1.529", end="BQ.1")   == [['B.1.1.529', 'BA.5', 'BA.5.3', 'BA.5.3.1', 'BE.1', 'BE.1.1', 'BE.1.1.1', 'BQ.1']]
+    # Going towards tip, recursive recombination
+    assert pango.get_paths(start="B.1.1.529",  end="XDB")   == [
+        ['B.1.1.529', 'BA.2', 'BA.2.10', 'BA.2.10.1', 'BJ.1', 'XBB', 'XBB.1', 'XBB.1.16', 'XBB.1.16.19', 'XDB'],
+        ['B.1.1.529', 'BA.2', 'BA.2.10', 'BA.2.10.1', 'BJ.1', 'XBB', 'XDB'],
+        ['B.1.1.529', 'BA.2', 'BA.2.75', 'BA.2.75.3', 'BM.1', 'BM.1.1', 'BM.1.1.1', 'XBB', 'XBB.1', 'XBB.1.16', 'XBB.1.16.19', 'XDB'],
+        ['B.1.1.529', 'BA.2', 'BA.2.75', 'BA.2.75.3', 'BM.1', 'BM.1.1', 'BM.1.1.1', 'XBB', 'XDB']
+    ]
+
+    # Going sideways, nope?
+    assert pango.get_paths(start="BA.1", end="BA.2")  == []
+
 def test_pangonet_get_recombinants():
     ...
 

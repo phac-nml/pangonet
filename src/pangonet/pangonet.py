@@ -7,12 +7,18 @@ import os
 import copy
 import logging
 import urllib.request
+from enum import Enum
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
 
 # Github Download setup and credentials
 ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
 LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
+
+class Direction(Enum):
+    ToRoot = 0
+    ToTips = 1
+    Unknown = 2
 
 class PangoNet:
 
@@ -234,7 +240,7 @@ class PangoNet:
             ancestors += [parent] + parent_ancestors
         # remove duplicates (python 3.7+ preserves order)
         ancestors = list(dict.fromkeys(ancestors))
-        return ancestors                 
+        return ancestors
 
     def get_children(self, lineage: str, network : OrderedDict = None):
         if not network:
@@ -297,6 +303,54 @@ class PangoNet:
         if not network:
             network = self.network
         return network[lineage]["parents"]
+
+    def get_paths(
+            self, 
+            start: str, 
+            end: str, 
+            network : OrderedDict = None, 
+            direction: Direction = Direction.Unknown, 
+            depth: int = 0,
+        ):
+        '''
+        '''
+        if not network:
+            network = self.network
+
+        # Recursion bottom out, found our target
+        if start == end:
+            return [[start]]
+        
+        # If we don't know the direction yet
+        if direction == Direction.Unknown:
+            # If end is an ancestor of start, we need to move towards the root
+            if end in self.get_ancestors(network=network, lineage=start):
+                direction = Direction.ToRoot
+            # If end is a descendant of start, we need to move towards the tips
+            elif end in self.get_descendants(network=network, lineage=start):
+                direction = Direction.ToTips
+            # Otherwise, unclear relationship for movement, stop now
+            else:
+                return []
+
+        # Figure out where we should go next in our search
+        next_nodes = []    
+        if direction == Direction.ToRoot:
+            parents = self.get_parents(network=network, lineage=start)
+            next_nodes = [p for p in parents if p == end or end in self.get_ancestors(network=network, lineage=p)]
+        elif direction == Direction.ToTips:
+            children = self.get_children(network=network, lineage=start)
+            next_nodes = [c for c in children if c == end or end in self.get_descendants(network=network, lineage=c)]
+
+        # Recursively search and update paths
+        paths = []
+        for lineage in next_nodes:     
+            next_paths = self.get_paths(network=network, start=lineage, end=end, direction=direction, depth=depth + 1)
+            for p in next_paths:
+                p = [start] + p
+                paths.append(p)
+
+        return paths
 
     def get_recombinants(self, descendants=False, network: OrderedDict = None):
         '''
