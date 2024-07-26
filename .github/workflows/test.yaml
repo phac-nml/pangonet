@@ -41,18 +41,23 @@ jobs:
           path: .
 
       # parse tag from load output, PR have unusual formats, also sometimes multiple tags
-      - name: Inspect Docker Image
-        run: |
-          ls -l pangonet.tar
-          file pangonet.tar
-
-      # parse tag from load output, PR have unusual formats, also sometimes multiple tags
       - name: Load Docker Image
         run: |
           load=$(docker load --input pangonet.tar | tee /dev/stderr)
           echo -e $load
           TAG=$(echo -e $load | sed 's/Loaded image: //g' | head -n 1 | cut -d ":" -f 2 | cut -d " " -f 1)
           echo DOCKER_TAG="$TAG" >> $GITHUB_ENV
+
+      - name: Set Run Command
+        run: |
+          echo RUN_CMD="docker run -e GITHUB_USERNAME=${{ github.actor }} -e GITHUB_TOKEN=${{ github.token }} "$DOCKER_IMAGE:$DOCKER_TAG >> $GITHUB_ENV
+
+      - name: Check Run Command
+        run: echo ${{ env.RUN_CMD }}
+
+      - name: CLI Help
+        run: |
+          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --help
 
   # ---------------------------------------------------------------------------          
   test:
