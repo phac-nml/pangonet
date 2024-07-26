@@ -38,7 +38,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: pangonet-docker
-          path: pangonet.tar
+          path: .
 
       # parse tag from load output, PR have unusual formats, also sometimes multiple tags
       - name: Inspect Docker Image
@@ -65,7 +65,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repo
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
       - name: Setup Python ${{ matrix.python-version }}

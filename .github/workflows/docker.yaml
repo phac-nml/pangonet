@@ -24,29 +24,29 @@ jobs:
       packages: write
 
     steps:
-      - name: checkout
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up QEMU
+      - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: registry login
+      - name: Registry Login
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: metadata
+      - name: Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: build
+      - name: Build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -54,14 +54,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=docker,dest=pangonet.tar
 
-      - name: load
+      - name: Load
         run: |
           load=$(docker load --input pangonet.tar | tee /dev/stderr)
           TAGS=$(echo $load | sed "s/Loaded image: //g")
           echo TAGS="$TAGS" >> $GITHUB_ENV
 
       # output.tags can be an array (ex. v0.2.0, main, latest)
-      - name: help
+      - name: Help
         run: >
           for tag in $TAGS; do
             echo $tag
@@ -69,7 +69,7 @@ jobs:
           done
 
       # On a tag that starts with v, push to registry
-      - name: build and push
+      - name: Build and Push
         uses: docker/build-push-action@v5
         if: startsWith(github.event.ref, 'refs/tags/v')
         with:
@@ -78,7 +78,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: upload image artifact
+      - name: Upload Image Artifact
         uses: actions/upload-artifact@v3
         if: always()
         with:
