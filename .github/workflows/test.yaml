@@ -11,10 +11,10 @@ on:
   release:
     types: [published]
 
-# env:
-#   GITHUB_USERNAME: ${{ github.actor }}
-#   GITHUB_TOKEN: ${{ github.token }}
-#   DOCKER_IMAGE: "ghcr.io/${{ github.repository }}"
+env:
+  GITHUB_USERNAME: ${{ github.actor }}
+  GITHUB_TOKEN: ${{ github.token }}
+  DOCKER_IMAGE: "ghcr.io/${{ github.repository }}"
 
 jobs:
 
@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10"]
         include:
           - os: ubuntu-latest
             arch: linux
@@ -62,4 +62,4 @@ jobs:
 
       - name: CLI Run
         run: |     
-          pangonet --output-prefix pango --output-all
+          pangonet --output-prefix output/pango --output-all

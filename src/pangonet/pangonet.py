@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 
 import sys
-import urllib.request
 from collections import OrderedDict
 import json
 import os
 import copy
 import logging
+#import urllib.request
+import requests
+from requests.auth import HTTPBasicAuth
 
 # Will use github API later to get proper download link
 ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
 LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
 
-logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
 
 class PangoNet:
 
@@ -27,19 +29,21 @@ class PangoNet:
         self.root = root        
         self.lineages = list()
 
-    def build(self, alias_key: str = None, lineage_notes: str = None, outdir: str = None):
+    def build(self, alias_key: str = None, lineage_notes: str = None, outdir: str = "."):
 
-        if outdir and outdir != "" and outdir != "." and not os.path.exists(outdir):
+        if outdir != "" and outdir != "." and not os.path.exists(outdir):
             os.makedirs(outdir)
         # Download alias key if not provided
         if not alias_key:
-            alias_key_path = self.download_alias_key(outdir=outdir)
+            alias_key_path = os.path.join(outdir, os.path.basename(ALIAS_KEY_URL))
+            self.download_file(url = ALIAS_KEY_URL, output = alias_key_path)
         else:
             alias_key_path = alias_key
         
         # Download lineage notes if not provided
         if not lineage_notes:
-            lineage_notes_path = self.download_lineage_notes(outdir=outdir)
+            lineage_notes_path = os.path.join(outdir, os.path.basename(LINEAGE_NOTES_URL))
+            self.download_file(url = LINEAGE_NOTES_URL, output = lineage_notes_path)
         else:
             lineage_notes_path = lineage_notes
 
@@ -163,33 +167,23 @@ class PangoNet:
 
         return network
 
-    def download_alias_key(self, url: str = ALIAS_KEY_URL, outdir: str = None):
+    def download_file(self, url: str = ALIAS_KEY_URL, output: str = None):
 
         # Get proper download link with github api
+        params = {}
+        api_token = os.environ.get('GITHUB_TOKEN')
+        if "github" in url and api_token:
+            params["auth"] =('user', f'{api_token}')
+        # If the url is actually a github api command
         if "api.github.com" in url:
-            with urllib.request.urlopen(url) as api_url:
-                url = str(json.load(api_url)["download_url"])
-
-        alias_key_path = os.path.basename(url)
-        if outdir:
-            alias_key_path = os.path.join(outdir, alias_key_path)
-        logging.info(f"Downloading alias key: {alias_key_path}")    
-        urllib.request.urlretrieve(url, alias_key_path)
-        return alias_key_path
-
-    def download_lineage_notes(self, url: str = LINEAGE_NOTES_URL, outdir: str = None):
-
-        # Get proper download link with github api
-        if "api.github.com" in url:
-            with urllib.request.urlopen(url) as api_url:
-                url = str(json.load(api_url)["download_url"])
+            url = requests.get(url=url, params=params).json()["download_url"]
         
-        lineage_notes_path = os.path.basename(url)
-        if outdir:
-            lineage_notes_path = os.path.join(outdir, lineage_notes_path)
-        logging.info(f"Downloading lineage notes: {lineage_notes_path}")        
-        urllib.request.urlretrieve(url, lineage_notes_path)
-        return lineage_notes_path
+        # Download file   
+        logging.info(f"Downloading file: {output}")
+        with open(output, 'w') as outfile:
+            outfile.write(requests.get(url=url, params=params).text)
+
+        return output
 
     def filter(self, lineages: [str], network: OrderedDict = None):
         '''
