@@ -6,15 +6,13 @@ import json
 import os
 import copy
 import logging
-#import urllib.request
-import requests
-from requests.auth import HTTPBasicAuth
-
-# Will use github API later to get proper download link
-ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
-LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
+import urllib.request
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
+
+# Github Download setup and credentials
+ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
+LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
 
 class PangoNet:
 
@@ -167,21 +165,27 @@ class PangoNet:
 
         return network
 
-    def download_file(self, url: str = ALIAS_KEY_URL, output: str = None):
+    def download_file(self, url: str, output: str = None):
 
-        # Get proper download link with github api
-        params = {}
-        api_token = os.environ.get('GITHUB_TOKEN')
-        if "github" in url and api_token:
-            params["auth"] =('user', f'{api_token}')
-        # If the url is actually a github api command
-        if "api.github.com" in url:
-            url = requests.get(url=url, params=params).json()["download_url"]
-        
-        # Download file   
         logging.info(f"Downloading file: {output}")
+
+        req = urllib.request.Request(url)
+        # Try to add a github token if needed
+        if "github" in url:
+            github_token = os.environ.get('GITHUB_TOKEN')
+            if github_token:
+                req.add_header('Authorization', f"Bearer {github_token}")
+            # If URL is actually a github api call
+            if "api.github.com" in url:
+                response = urllib.request.urlopen(req)
+                url = json.loads(response.read())["download_url"]
+                req = urllib.request.Request(url)
+
+        # Download file
         with open(output, 'w') as outfile:
-            outfile.write(requests.get(url=url, params=params).text)
+            response = urllib.request.urlopen(req)
+            content = response.read().decode(response.headers.get_content_charset())
+            outfile.write(content)
 
         return output
 
