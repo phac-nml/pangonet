@@ -1,6 +1,6 @@
 # pangonet
 
-Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.
+Create and manipulate pango lineages in a phylogenetic network for SARS-CoV-2 and MPOX.
 
 ```mermaid
 graph LR;
@@ -35,18 +35,17 @@ graph LR;
 
 ## Why pangonet?
 
-1. **Quickly look up phylogenetic relationships between lineages.**
-
+1. **Query phylogenetic relationships between SARS-CoV-2 and MPOX lineages.**
 
     Multiple parents due to recombination are handled, as is recursive recombination where a lineage has experienced recombination multiple times in its evolutionary history.
 
 1. **Lots of output formats.**
 
-    The pango network can be exported to: `json`, `tsv`, `mermaid`, `dot` (graphviz), `newick` and [`extended newick`](https://en.wikipedia.org/wiki/Newick_format#Extended_Newick) for recombination. 
+    The pango network can be exported to: `json`, `tsv`, `mermaid`, `dot` (graphviz), `newick`, [`extended newick`](https://en.wikipedia.org/wiki/Newick_format#Extended_Newick) for recombination, and `yaml` for `freyja`.
 
 1. **Command-line interface and python library that require no input files.**
 
-    All the required resources will be downloaded for you from [pango-designation](https://github.com/cov-lineages/pango-designation)!
+    All the required resources will be downloaded for you from public repositories such as [pango-designation](https://github.com/cov-lineages/pango-designation) and [mpxv-desgination](https://github.com/mpxv-lineages/lineage-designation)!
 
 1. **`pangonet` is a single script with no dependencies aside from `python`.**
 
@@ -58,7 +57,7 @@ graph LR;
 
 ```python
 from pangonet import PangoNet
-pango = PangoNet().build()
+pango = PangoNet().build(organism="sars-cov-2")
 
 # Alias manipulation
 pango.uncompress("KP.3.1")
@@ -96,27 +95,36 @@ pango.get_mrca(["XE", "XG"])
 ### Command-Line Interface
 
 ```bash
-$ pangonet --output-prefix output/pango --output-all
+$ pangonet --organism sars-cov-2 --output-prefix output/sars-cov-2 --output-all
 
-2024-07-18 14:05:20,587 INFO:Begin
-2024-07-18 14:05:20,591 INFO:Downloading alias key: output/alias_key.json
-2024-07-18 14:05:20,845 INFO:Downloading lineage notes: output/lineage_notes.txt
-2024-07-18 14:05:21,298 INFO:Creating aliases.
-2024-07-18 14:05:21,301 INFO:Creating network.
-2024-07-18 14:05:21,517 INFO:Exporting table: output/pango.tsv
-2024-07-18 14:05:21,569 INFO:Exporting standard newick: output/pango.nwk
-2024-07-18 14:05:21,580 INFO:Exporting extended newick: output/pango.enwk
-2024-07-18 14:05:21,589 INFO:Exporting mermaid: output/pango.mermaid
-2024-07-18 14:05:21,597 INFO:Exporting dot: output/pango.dot
-2024-07-18 14:05:21,602 INFO:Exporting json: output/pango.json
-2024-07-18 14:05:21,662 INFO:Exporting condensed json: output/pango.condensed.json
-2024-07-18 14:05:21,757 INFO:Done
+2024-09-06 16:38:03,775 INFO:Begin
+2024-09-06 16:38:03,776 INFO:Creating output directory: output
+2024-09-06 16:38:03,780 INFO:Downloading file: output/alias_key.json
+2024-09-06 16:38:04,622 INFO:Downloading file: output/lineage_notes.txt
+2024-09-06 16:38:06,058 INFO:Creating aliases.
+2024-09-06 16:38:06,081 INFO:Creating network.
+2024-09-06 16:38:06,712 INFO:Exporting table: output/sars-cov-2.tsv
+2024-09-06 16:38:06,780 INFO:Exporting standard newick: output/sars-cov-2.nwk
+2024-09-06 16:38:06,794 INFO:Exporting extended newick: output/sars-cov-2.enwk
+2024-09-06 16:38:06,807 INFO:Exporting mermaid: output/sars-cov-2.mermaid
+2024-09-06 16:38:06,899 INFO:Exporting dot: output/sars-cov-2.dot
+2024-09-06 16:38:06,911 INFO:Exporting json: output/sars-cov-2.json
+2024-09-06 16:38:06,980 INFO:Exporting compact json: output/sars-cov-2.compact.json
+2024-09-06 16:38:07,174 INFO:Exporting freyja: output/sars-cov-2.lineages.yml
+2024-09-06 16:38:07,192 INFO:Done
 ```
 
 ## Install
 
 - `pangonet` is written in standard python and has no dependencies aside from `python>=3.7`.
 - PyPi and conda packages will be coming soon!
+
+1. `pangonet` can be downloaded and run as a standlone script.
+
+    ```bash
+    wget https://raw.githubusercontent.com/phac-nml/pangonet/main/src/pangonet/pangonet.py
+    python pangonet.py --help
+    ```
 
 1. `pangonet` can be installed from source as a CLI tool and python package.
 
@@ -127,27 +135,19 @@ $ pangonet --output-prefix output/pango --output-all
     pangonet --help
     ```
 
-1. `pangonet` can also be downloaded and run as a standlone script.
-
-    ```bash
-    wget https://raw.githubusercontent.com/phac-nml/pangonet/main/src/pangonet/pangonet.py
-    python pangonet.py --help
-    ```
-
 ## Visualize
 
-`pangonet` also allows you to export the network in a wide variety of formats. We will filter down the lineages to better demonstrate visualization.
+`pangonet` allows you to export the network in a wide variety of formats. We will filter down the lineages to better demonstrate visualization.
 
 ```python
 from pangonet import PangoNet
-pango = PangoNet().build()
+pango = PangoNet().build(organism="sars-cov-2")
 
 lineages = []
 for l in ["XDB", "XBL", "AY.4"]:
     lineages += [l] + pango.get_ancestors(l)
 
 pango_filter = pango.filter(lineages)
-
 ```
 
 #### Mermaid
@@ -258,6 +258,21 @@ print(pango_filter.to_json(compact=True))
 }
 ```
 
+#### Freyja
+
+Export the network to a freyja yaml files, used with the `--meta` flag for `freyja demix` or `freyja boot`.
+
+```yaml
+- name: A
+  alias: A
+  children:
+    - A.1
+    - A.2
+    - A.2.2
+    - A.2.3
+  ...
+```
+
 ## To Do
 
 - `read_json`: Create `PangoNetwork` from an input JSON file.
@@ -266,10 +281,13 @@ print(pango_filter.to_json(compact=True))
 
 [pangonet](https://github.com/phac-nml/pangonet) is built and maintained by [Katherine Eaton](https://ktmeaton.github.io/) at the [National Microbiology Laboratory (NML)](https://github.com/phac-nml) of the Public Health Agency of Canada (PHAC).
 
+- Special thanks to @corneliusroemer for the resources [mpox-designation](https://github.com/mpxv-lineages/lineage-designation), [pango-designation](https://github.com/cov-lineages/pango-designation).
+
 This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification ([emoji key](https://allcontributors.org/docs/en/emoji-key)). Contributions of any kind welcome!
 
 <table>
   <tr>
-    <td align="center"><a href="https://ktmeaton.github.io"><img src="https://s.gravatar.com/avatar/0b9dc28b3e64b59f5ce01e809d214a4e?s=80" width="100px;" alt=""/><br /><sub><b>Katherine Eaton</b></sub></a><br /><a href="https://github.com/phac-nml/rebar/commits?author=ktmeaton" title="Code">💻</a> <a href="https://github.com/phac-nml/rebar/commits?author=ktmeaton" title="Documentation">📖</a> <a href="#design-ktmeaton" title="Design">🎨</a> <a href="#ideas-ktmeaton" title="Ideas, Planning, & Feedback">🤔</a> <a href="#infra-ktmeaton" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="#maintenance-ktmeaton" title="Maintenance">🚧</a></td>
+    <td align="center"><a href="https://ktmeaton.github.io"><img src="https://s.gravatar.com/avatar/0b9dc28b3e64b59f5ce01e809d214a4e?s=80" width="100px;" alt=""/><br /><sub><b>Katherine Eaton</b></sub></a><br /><a href="https://github.com/phac-nml/rebar/commits?author=ktmeaton" title="Code">💻</a> <a href="https://github.com/phac-nml/pangonet/commits?author=ktmeaton" title="Documentation">📖</a> <a href="#design-ktmeaton" title="Design">🎨</a> <a href="#ideas-ktmeaton" title="Ideas, Planning, & Feedback">🤔</a> <a href="#infra-ktmeaton" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="#maintenance-ktmeaton" title="Maintenance">🚧</a></td>
+    <td align="center"><a href="https://github.com/corneliusroemer"><img src="https://avatars.githubusercontent.com/u/25161793?v=4" width="100px;" alt=""/><br /><sub><b>Cornelius Roemer</b></sub></a><br /><a href="https://github.com/cov-lineages/pango-designation" title="Data">🔣</a><a href="#design-ktmeaton" title="Design">🎨</a></td>
   </tr>
 </table>

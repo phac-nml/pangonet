@@ -12,8 +12,45 @@ from enum import Enum
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s %(levelname)s:%(message)s')
 
 # Github Download setup and credentials
-ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
-LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
+SARSCOV2_ALIAS_KEY_URL     = "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
+SARSCOV2_LINEAGE_NOTES_URL = "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
+
+# -----------------------------------------------------------------------------
+# Organisms
+
+class Organism(Enum):
+    SARSCOV2 = "sars-cov-2"
+    MPOX = "mpox"
+
+    @staticmethod
+    def from_str(name):
+        """
+        Source: https://stackoverflow.com/a/49060635
+        Author: rogueleaderr
+        """
+        if name == "sars-cov-2":
+            return Organism.SARSCOV2
+        elif name == "mpox":
+            return Organism.MPOX
+        elif not name:
+            raise Exception(f"An organism name must be provided.")
+        else:
+            raise NotImplementedError(f"The organism '{name}' is not implemented yet.")
+
+    @property
+    def alias_key_url(self):
+        if self == Organism.SARSCOV2:
+            return "https://api.github.com/repos/cov-lineages/pango-designation/contents/pango_designation/alias_key.json"
+        elif self == Organism.MPOX:
+            return "https://api.github.com/repos/mpxv-lineages/lineage-designation/contents/auto-generated/alias_key.json"
+        
+    @property
+    def lineage_notes_url(self):
+        if self == Organism.SARSCOV2:
+            return "https://api.github.com/repos/cov-lineages/pango-designation/contents/lineage_notes.txt"
+        elif self == Organism.MPOX:
+            return "https://api.github.com/repos/mpxv-lineages/lineage-designation/contents/auto-generated/lineages.md"
+            #return "https://api.github.com/repos/mpxv-lineages/lineage-designation/contents/auto-generated/lineages.json"
 
 class Direction(Enum):
     ToRoot = 0
@@ -22,39 +59,70 @@ class Direction(Enum):
 
 class PangoNet:
 
-    def __init__(self, root: str = "root"):
-        '''
-        root: If not None, manually create top level node with this name
-        '''
+    def __init__(self):
 
         self.aliases = dict()
         self.hierarchy = OrderedDict()
         self.network = OrderedDict()
-        self.root = root        
+        self.organism = None
+        self.root = None      
         self.lineages = list()
 
-    def build(self, alias_key: str = None, lineage_notes: str = None, outdir: str = "."):
+    def bfs(self, network: OrderedDict = None, start: str = None):
+        """Perform a breadth-first search, returning all lineages encountered."""
+
+        if not network:
+            network = self.network
+
+        if not start:
+            start = self.root
+
+        nodes = [start]
+        # Get all nodes that are 1 deeper but also descendants of the start
+        descendants = self.get_descendants(lineage=start, network=network)
+        curr_depth = network[start]["depth"]
+        next_nodes = ["fake_value"]
+        while len(next_nodes) > 0:
+            curr_depth += 1
+            next_nodes = [d for d in descendants if network[d]["depth"] == curr_depth]
+            nodes += next_nodes
+        return nodes
+
+    def build(self, organism: str = None, root: str = "root", alias_key: str = None, lineage_notes: str = None, outdir: str = "."):
+        '''
+        root: If not None, manually create top level node with this name
+        '''
+
+        self.root = root
+        self.organism = Organism.from_str(organism)
 
         if outdir != "" and outdir != "." and not os.path.exists(outdir):
             os.makedirs(outdir)
         # Download alias key if not provided
         if not alias_key:
-            alias_key_path = os.path.join(outdir, os.path.basename(ALIAS_KEY_URL))
-            self.download_file(url = ALIAS_KEY_URL, output = alias_key_path)
+            alias_key_url = self.organism.alias_key_url
+            alias_key_path = os.path.join(outdir, os.path.basename(alias_key_url))
+            self.download_file(url = alias_key_url, output = alias_key_path)
         else:
             alias_key_path = alias_key
         
         # Download lineage notes if not provided
         if not lineage_notes:
-            lineage_notes_path = os.path.join(outdir, os.path.basename(LINEAGE_NOTES_URL))
-            self.download_file(url = LINEAGE_NOTES_URL, output = lineage_notes_path)
+            lineage_notes_url = self.organism.lineage_notes_url
+            lineage_notes_path = os.path.join(outdir, os.path.basename(lineage_notes_url))
+            self.download_file(url = lineage_notes_url, output = lineage_notes_path)
         else:
             lineage_notes_path = lineage_notes
 
-        self.lineages     = self.parse_lineages(lineage_notes_path)
-        self.aliases      = self.parse_aliases(alias_key_path)
+        self.aliases      = self.parse_aliases(alias_key_path)    
         self.recombinants = self.parse_recombinants(alias_key_path)
-        self.network      = self.create_network()
+
+        if self.organism == Organism.SARSCOV2:
+            self.lineages     = self.parse_sarscov2_lineages(lineage_notes_path)
+        elif self.organism == Organism.MPOX:
+            self.lineages     = self.parse_mpox_lineages(lineage_notes_path)
+    
+        self.network = self.create_network()
 
         return self
 
@@ -62,29 +130,30 @@ class PangoNet:
         '''
         Compress lineage name
         '''
+        compressed = lineage
+        try:
+            uncompressed = self.uncompress(lineage)
+        except Exception as e:
+            uncompressed = lineage
 
-        # uncompress fully first
-        lineage_compress = self.uncompress(lineage)
-        # Split nomenclature on '.'. ex. BC = B.1.1.529.1.1.1
-        # [ 'B', '1', '1', '529', '1', '1', '1']
-        lineage_split = lineage_compress.split(".")
-        if len(lineage_split) <= 4:
-            return(lineage)
+        lineage_split = uncompressed.split(".")
+        # Simple compression, since the lineage is already decompressed
+        match_found = False
+        for i in range(1,len(lineage_split)):
+            prefix = ".".join(lineage_split[0:len(lineage_split)-i])
+            suffix = ".".join(lineage_split[len(lineage_split)-i:])
+            for a,info in self.aliases.items():
+                if info["uncompressed"] == prefix:
+                    compressed = ".".join([a, suffix])
+                    match_found = True
+                    break
+            if match_found: break
 
-        # Pango lineages have a maximum of four pieces before they need to be aliased
-        # Keep compressing it until it's the right size
-        while len(lineage_split) > 4:
-            length = len(lineage_split)
-            for i in range(1, length):
-                prefix = ".".join(lineage_split[0:length - i])
-                suffix = lineage_split[length - i:]   
-                # Stop at the first alias encounter
-                if prefix in self.aliases.values():
-                    prefix_alias = [alias for alias,lineage in self.aliases.items() if lineage == prefix]
-                    lineage_split = prefix_alias + suffix
-        # Join the split pieces back together with the '.'
-        alias = ".".join(lineage_split)
-        return alias
+        # If the alias does not exist in the network, raise an error
+        if compressed not in self.lineages:
+            raise Exception(f"Alias {compressed} of lineage {lineage} does not exist.")
+
+        return(compressed)
 
     def create_network(self):
         '''
@@ -95,7 +164,7 @@ class PangoNet:
         network = OrderedDict()
         # Manually add a root node according to params
         if self.root:
-            network[self.root] = {"uncompressed": "", "depth": 0, "parents": [], "children": [], "ancestors": [], "descendants": [], "depth": 0}
+            network[self.root] = {"uncompressed": "", "depth": 0, "parents": [], "children": [], "ancestors": [], "descendants": [], "alias": None}
         root = self.root
 
         # ---------------------------------------------------------------------
@@ -105,6 +174,12 @@ class PangoNet:
 
             uncompressed = self.uncompress(lineage)
             uncompressed_split = uncompressed.split(".")
+
+            alias = None
+            for a,info in self.aliases.items():
+                if info["uncompressed"] == uncompressed:
+                    alias = a
+                    break            
 
             # Option 1: Root node
             # If we don't have a root yet, assign to first one encountered
@@ -117,16 +192,17 @@ class PangoNet:
             elif lineage in self.recombinants:
                 parents = self.recombinants[lineage]
             else:
-                uncompressed = self.uncompress(lineage)
                 # Option 3: Top level node, A or B
                 if "." not in uncompressed:
                     parents = [self.root]
-                else:
+                elif self.organism == Organism.SARSCOV2:
                     uncompressed_parent = uncompressed_split[0: (len(uncompressed_split) - 1)]
                     parents = [self.compress(".".join(uncompressed_parent))]
+                elif self.organism == Organism.MPOX:
+                    parents = [self.hierarchy[lineage]]
 
-            network[lineage] = {"uncompressed": uncompressed, "depth": 0, "parents": parents, "children": [], "ancestors": [], "descendants": []}
-    
+            network[lineage] = {"uncompressed": uncompressed, "depth": 0, "parents": parents, "children": [], "ancestors": [], "descendants": [], "alias": alias }
+
         # ---------------------------------------------------------------------
         # Iteratation #2: Children
 
@@ -145,10 +221,12 @@ class PangoNet:
         # Iteratation #5: uncompressed aliases
 
         lineages = list(network.keys())
-        for lineage in lineages:
-            uncompressed = network[lineage]["uncompressed"]
-            if uncompressed and uncompressed != '' and uncompressed not in network:
-                network[uncompressed] = network[lineage]
+        # Maybe only for sars-cov-2, because we need to rethink how compress/uncompress works for mpox
+        if self.organism == Organism.SARSCOV2:        
+            for lineage in lineages:
+                uncompressed = network[lineage]["uncompressed"]
+                if uncompressed and uncompressed != '' and uncompressed not in network:
+                    network[uncompressed] = network[lineage]
 
         # ---------------------------------------------------------------------
         # Iteratation #4: Depth
@@ -168,8 +246,32 @@ class PangoNet:
             else:
                 depth = len(info["uncompressed"].split("."))
             network[lineage]["depth"] = depth
+            
+        # ---------------------------------------------------------------------
+        # Order network nodes by a depth-first search (DFS)
 
+        lineage_order = self.dfs(network=network, start="root")
+        network = {lineage:network[lineage] for lineage in lineage_order}
+        
         return network
+
+    
+    def dfs(self, network: OrderedDict = None, start: str = None, nodes = None):
+        """Perform a depth first search, returning all lineages encountered."""
+
+        if not network:
+            network = self.network
+
+        if not nodes:
+            nodes = []
+
+        if not start:
+            start = self.root
+
+        nodes.append(start)
+        for child in self.get_children(lineage=start, network=network):
+            self.dfs(start=child, nodes=nodes, network=network)
+        return nodes 
 
     def download_file(self, url: str, output: str = None):
 
@@ -246,6 +348,9 @@ class PangoNet:
         if not network:
             network = self.network
         return network[lineage]["children"]
+
+    def get_depth(self, lineage: str, network : OrderedDict = None):
+        return network[lineage]["depth"]
 
     def get_descendants(self, lineage: str, network : OrderedDict = None):
         '''
@@ -368,7 +473,6 @@ class PangoNet:
 
         return recombinants
 
-
     def parse_aliases(self, alias_key_path: str):
         '''
         Extract the aliases from the hierarchy and removing recombinants because they 
@@ -379,25 +483,63 @@ class PangoNet:
         logging.info(f"Creating aliases.")
         with open(alias_key_path) as data: 
             alias_key = json.load(data)
-            aliases = {alias:lineage for alias,lineage in alias_key.items() if lineage != '' and type(lineage) != list}
+            aliases = OrderedDict()
+            for alias,lineage in alias_key.items():
+                if lineage == '' or type(lineage) == list: continue
+                aliases[alias] = {"uncompressed": lineage, "compressed": lineage}
+                lineage_split = lineage.split(".")
+                # Simple compression, since the lineage will always be 100% decompressed 
+                # in the alias key
+                match_found = False
+                for i in range(1,len(lineage_split)):
+                    prefix = ".".join(lineage_split[0:len(lineage_split)-i])
+                    suffix = ".".join(lineage_split[len(lineage_split)-i:])
+                    for a,info in aliases.items():
+                        if info["uncompressed"] == prefix:
+                            aliases[alias]["compressed"] = ".".join([a, suffix])
+                            match_found = True
+                            break
+                    if match_found: break
+
         return aliases
 
-    def parse_lineages(self, lineage_notes_path):
+    def parse_mpox_lineages(self, lineage_notes_path):
         '''
-        Returns a list of designated lineages from the lineage notes.
+        Returns a list of designated mpox lineages from the lineage notes.
+        '''
+
+        lineages = []
+        # Parse out lineages and parents from markdown
+        with open(lineage_notes_path) as infile:
+            lineage = None  
+            for line in infile:
+                line = line.strip()
+                if line.startswith("## "):
+                    lineage = line.replace("## ", "")
+                    lineages.append(lineage)
+                elif line.startswith("* parent: ["):
+                    parent = line.replace("* parent: [", "").split("]")[0]
+                    self.hierarchy[lineage] = parent
+
+        return(lineages)
+
+    def parse_sarscov2_lineages(self, lineage_notes_path):
+        '''
+        Returns a list of designated sars-cov-2 lineages from the lineage notes.
         '''
         lineages = []
 
-        # The lineage notes file is a TSV table
-        with open(lineage_notes_path) as table:
-            # Locate the lineage column in the header
-            header = table.readline().strip().split("\t")
-            lineage_i = header.index("Lineage")
-            for line in table:
-                lineage = line.strip().split("\t")[lineage_i]
-                # Skip over Withdrawn lineages (that start with '*')
-                if lineage.startswith('*'): continue
-                lineages.append(lineage)
+        if self.organism == Organism.SARSCOV2:
+            # The lineage notes file is a TSV table
+            with open(lineage_notes_path) as table:
+                # Locate the lineage column in the header
+                header = table.readline().strip().split("\t")
+                lineage_i = header.index("Lineage")
+                for line in table:
+                    lineage = line.strip().split("\t")[lineage_i]
+                    # Skip over Withdrawn lineages (that start with '*')
+                    if lineage.startswith('*'): continue
+                    lineages.append(lineage)
         
         return lineages
 
@@ -421,6 +563,7 @@ class PangoNet:
               
 
     def to_dot(self, network: OrderedDict = None):
+        """Convert network to graphviz DOT."""        
 
         if not network:
             network = self.network
@@ -439,9 +582,41 @@ class PangoNet:
         lines.append("}")                    
         dot  = "\n".join(lines)
         return dot
+    
+    def to_freyja(self, network: OrderedDict = None):
+        """Convert network to freyja lineage hierarchy yaml."""
+
+        if not network:
+            network = self.network
+            
+        lines = []
+
+        for lineage,info in network.items():
+            # Exclude the manual 'root' node
+            if lineage == "root": continue
+            lines.append(f"- name: {lineage}")
+            uncompress = self.uncompress(lineage)            
+            lines.append(f"  alias: {uncompress}")
+
+            # 'children' in freyja actually refers to all descendants
+            descendants = self.get_descendants(lineage)
+            if len(descendants) > 0:
+                lines.append(f"  children:")
+                for child in descendants:
+                    lines.append(f"    - {child}")
+
+            parents = self.get_parents(lineage)
+            if len(parents) > 1:
+                lines.append(f"  recombinant_parents: {','.join(parents)}")
+            elif len(parents) == 1 and parents[0] != 'root':
+                lines.append(f"  parent: {parents[0]}")
+
+        freyja  = "\n".join(lines)
+        return freyja
 
 
     def to_json(self, network: OrderedDict = None, compact=False):
+        """Convert network to JSON."""
         if not network:
             network = self.network
 
@@ -459,6 +634,7 @@ class PangoNet:
 
 
     def to_mermaid(self, network: OrderedDict = None):
+        """Convert network to mermaid diagram."""        
 
         if not network:
             network = self.network
@@ -479,9 +655,7 @@ class PangoNet:
 
 
     def to_newick(self, node: str=None, parent: str=None, processed:set=set(), depth:int=0, extended:bool=True):
-        '''
-        Convert network to newick.
-        '''
+        """Convert network to newick tree."""
 
         # If no root node given, use first node in the network
         if depth == 0:
@@ -540,9 +714,7 @@ class PangoNet:
 
 
     def to_table(self, sep="\t"):
-        '''
-        Create tsv table.
-        '''
+        """Convert network to table."""
 
         header = sep.join(["lineage", "parents", "children", "recombinant", "recombinant_descendant"])
         rows   = [header]
@@ -566,16 +738,18 @@ class PangoNet:
         Uncompress lineage name.
         '''
 
+        if lineage not in self.lineages:
+            raise Exception(f"Lineage {lineage} does not exist.")
+
         # Split nomenclature on '.'. ex. BC = B.1.1.529.1.1.1
         # [ 'B', '1', '1', '529', '1', '1', '1']
         lineage_split = lineage.split(".")
-        # Pango lineages have a maximum of four pieces before they need to be aliased
-        # Keep compressing it until it's the right size
         prefix = lineage_split[0]
         if prefix in self.aliases:
             suffix = lineage_split[1:] if len(lineage_split) > 1 else []
-            lineage_split = [self.aliases[prefix]] + suffix
+            lineage_split = [self.aliases[prefix]["uncompressed"]] + suffix
             lineage = ".".join(lineage_split)
+            
         return(lineage)
 
 def get_cli_options():
@@ -584,6 +758,7 @@ def get_cli_options():
     description = 'pangonet v0.1.0 | Create and manipulate SARS-CoV-2 pango lineages in a phylogenetic network.'
     parser = argparse.ArgumentParser(description=description)
 
+    parser.add_argument('--organism',      help='Organism name.', choices=[o.value for o in Organism], required=True)
     parser.add_argument('--lineage-notes', help='Path to the lineage_notes.txt')
     parser.add_argument('--alias-key',     help='Path to the alias_key.json')
     parser.add_argument('--output-prefix', help='Output prefix', default="pango")
@@ -594,7 +769,8 @@ def get_cli_options():
     parser.add_argument('--enwk',          help='Output extended newick tree for IcyTree', action="store_true")
     parser.add_argument('--mermaid',       help='Output mermaid graph', action="store_true")
     parser.add_argument('--dot',           help='Output dot for graphviz', action="store_true")
-    parser.add_argument('-v', '--version',       help='Print version', action="store_true")
+    parser.add_argument('--freyja',        help='Output lineages hierarchy for freyja.', action="store_true")
+    parser.add_argument('-v', '--version', help='Print version', action="store_true")
 
     return parser.parse_args()
 
@@ -615,7 +791,7 @@ def cli():
         os.makedirs(outdir)
 
     # Create the network from the alias key and lineage notes, will download the files if not given
-    pango = PangoNet().build(alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
+    pango = PangoNet().build(organism=options.organism, alias_key=options.alias_key, lineage_notes=options.lineage_notes, outdir=outdir)
 
     # -------------------------------------------------------------------------
     # Export
@@ -674,6 +850,14 @@ def cli():
         json_data = pango.to_json(compact=True)
         with open(json_path, 'w') as outfile:
             outfile.write(json_data + "\n")
+
+    # Freyja Lineage Hierarchy
+    if options.output_all or options.freyja:
+        freyja_path = options.output_prefix + ".lineages.yml"
+        freyja = pango.to_freyja()
+        logging.info(f"Exporting freyja: {freyja_path}")
+        with open(freyja_path, 'w') as outfile:
+            outfile.write(freyja + "\n")
 
     logging.info(f"Done") 
 

@@ -1,1 +1,1 @@
-from .pangonet import PangoNet,cli
+from .pangonet import PangoNet,cli,Organism
