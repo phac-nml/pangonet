@@ -56,9 +56,13 @@ jobs:
         run: |
           docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --help
 
-      - name: CLI Run
+      - name: CLI SARS-CoV-2
         run: |     
-          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --output-prefix output/pango --output-all
+          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --organism sars-cov-2 --output-prefix output/sars-cov-2 --output-all
+
+      - name: CLI MPOX
+        run: |     
+          docker run -e GITHUB_TOKEN=${{ github.token }} $DOCKER_IMAGE:$DOCKER_TAG pangonet --organism mpox --output-prefix output/mpox --output-all
 
   # ---------------------------------------------------------------------------          
   test:
