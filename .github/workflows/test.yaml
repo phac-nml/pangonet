@@ -92,6 +92,10 @@ jobs:
         run: |
           pangonet --help
 
-      - name: CLI Run
+      - name: CLI SARS-CoV-2
         run: |     
-          pangonet --output-prefix output/pango --output-all
+          pangonet --organism sars-cov-2 --output-prefix output/sars-cov-2 --output-all
+
+      - name: CLI MPOX
+        run: |     
+          pangonet --organism mpox --output-prefix output/mpox --output-all          
