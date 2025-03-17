@@ -57,7 +57,7 @@ graph LR;
 ### Python Library
 
 ```python
-from pangonet import PangoNet
+from pangonet.pangonet import PangoNet
 pango = PangoNet().build()
 
 # Alias manipulation
